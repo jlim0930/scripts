@@ -1,58 +1,69 @@
 #!/bin/sh
 
-# defs
-TCPDUMP=/usr/sbin/tcpdump
-IFCONFIG=/sbin/ifconfig
-ETHTOOL=/sbin/ethtool
-NETSTAT=/bin/netstat
+# this script will plumb up all the interfaces and grab its information
+# version 0.2 - 2012-11-13 completely rewritten
+# version 0.1 - inital
 
-# count total interfaces
-TOTAL=`$IFCONFIG -a | grep -c "eth"`
-printf "\nTotal physical interface count : $TOTAL\n\n"
+HOSTNAME=`hostname`
+echo $HOSTNAME
+echo ""
 
-# get details
-if [ "$(id -u)" == "0" ] ; then
-  printf "INTERFACE\tADDRESS(slave)\tNETMASK\t\tMAC\t\t\tLINK\tSPEED\t\tDUPLEX\n"
-else
-  printf "INTERFACE\tADDRESS(slave)\tNETMASK\t\tMAC\n"
-fi
+format="%10s%19s%16s%16s%8s%8s%12s%8s  %-s\n"
+printf "$format" "INTERFACE" "MAC" "IP" "NETMASK" "SLAVE?" "LINK" "SPEED" "DUPLEX"
+printf "$format" "---------" "---" "--" "-------" "------" "----" "-----" "------"
 
-ip addr | grep inet | egrep -v "host lo|inet6" | while read line
+#printf "INT\tMAC\t\t\tIP\t\tNETMASK\t\t\tSLAVE\tLINK\tSPEED\tDUPLEX\n"
+
+LIST=`ip link show | grep BROADCAST | awk {' print $2 '} | awk -F: {' print $1 '}`
+
+
+for INTERFACE in $LIST
 do
-  INTERFACE=$(echo $line | sed 's/^.* //')
-  ADDRESS=$($IFCONFIG $INTERFACE | grep inet[^6] | awk '{ print $2 '} | grep -o -E "([[:digit:]]+\.){3}[[:digit:]]+"                                                                                                                          ;)
-#  BCAST=$($IFCONFIG $INTERFACE | grep inet[^6] | awk '{ print $3 '} | grep -o -E "([[:digit:]]+\.){3}[[:digit:]]+";                                                                                                                          )
-  NMASK=$($IFCONFIG $INTERFACE | grep inet[^6] | awk '{ print $4 '} | grep -o -E "([[:digit:]]+\.){3}[[:digit:]]+";)
-  MAC=$($IFCONFIG $INTERFACE | grep HWaddr | awk {' print $5 '})
-  if [ "$(id -u)" == "0" ] ; then
-    LINK=$($ETHTOOL $INTERFACE | grep Link | awk {' print $3 '})
-    SPEED=$($ETHTOOL $INTERFACE | grep Speed | awk {' print $2 '})
-    DUPLEX=$($ETHTOOL $INTERFACE | grep Duplex | awk {' print $2 '})
-  fi
-  if [ `echo $INTERFACE | grep "bond"` ] ; then
-    cat /proc/net/bonding/$INTERFACE | grep "Slave Interface" | awk {' print $3 '} | while read line2
-        do
-          if [ "$(id -u)" == "0" ] ; then
-            BLINK=$($ETHTOOL $line2 | grep Link | awk {' print $3 '})
-            BSPEED=$($ETHTOOL $line2 | grep Speed | awk {' print $2 '})
-            BDUPLEX=$($ETHTOOL $line2 | grep Duplex | awk {' print $2 '})
-          fi
-          MAC=$(cat /proc/net/bonding/$INTERFACE | egrep "Slave Interface|MII Status|Permanent" | sed '1n;N;N;s/\n/                                                                                                                           /g' | grep $line2 | cut -d" " -f10 | tr '[:lower:]' '[:upper:]')
-          LINK=$(cat /proc/net/bonding/$INTERFACE | egrep "Slave Interface|MII Status" | sed '1n;N;s/\n/ /g' | grep                                                                                                                           $line2 | cut -d" " -f6)
-          PRIMARY=$(cat /proc/net/bonding/bond0 | grep Active | cut -d" " -f4)
-          STATUS="BACKUP"
-          if [ $PRIMARY == $line2 ]; then
-            STATUS="ACTIVE"
-          fi
-          printf "$line2\t\t$INTERFACE\t\t$STATUS-$LINK\t$MAC\t$BLINK\t$BSPEED\t$BDUPLEX\n"
-    done
-  fi
-  if [ "$(id -u)" == "0" ] ; then
-    printf "$INTERFACE\t\t$ADDRESS\t$NMASK\t$MAC\t$LINK\t$SPEED\t$DUPLEX\n"
-  else
-    printf "$INTERFACE\t\t$ADDRESS\t$NMASK\t$MAC\n"
-  fi
+        # configure the interface up
+        ifconfig $INTERFACE up
+
+        # find the link status
+        LINK="no"
+        if [ `ip link show | grep $INTERFACE | grep -c MASTER` -eq 1 ]; then
+          LINK="bonded"
+        else
+          LINK=`ethtool $INTERFACE | grep Link | awk {' print $3 '}`
+        fi
+
+        # if link is up find speed and duplex
+        SPEED="n/a"
+        DUPLEX="n/a"
+        if [ $LINK == "yes" ]; then
+          SPEED=`ethtool $INTERFACE | grep Speed | awk {' print $2 '}`
+          DUPLEX=`ethtool $INTERFACE | grep Duplex | awk {' print $2 '}`
+        fi
+
+        # MAC address
+        MAC=`ifconfig $INTERFACE | grep HWaddr | awk {' print $5 '}`
+        if [ `ip link show | grep $INTERFACE | grep -c SLAVE` -eq 1 ]; then
+          MAC=`cat /proc/net/bonding/bond* | egrep "Slave Interface|Permanent" | sed 'N;s/\n/ /' | grep $INTERFACE | awk {' print $7 '}`
+        fi
+
+        # IP address & netmask
+        if [ `ifconfig $INTERFACE | grep -c 'inet addr'` -lt 1 ]; then
+          IP="none    "
+          NETMASK="none"
+        else
+          IP=`ifconfig $INTERFACE | grep "inet addr" | awk {' print $2 '} | awk -F: {' print $2 '}`
+          NETMASK=`ifconfig $INTERFACE | grep "inet addr" | awk {' print $4 '} | awk -F: {' print $2 '}`
+        fi
+
+        # SLAVE ?
+        if [ `ip link show | grep $INTERFACE | grep -c SLAVE` -eq 1 ]; then
+          SLAVE=`ip link show | grep $INTERFACE | awk {' print $9 '}`
+        else
+          SLAVE="no"
+        fi
+
+#       printf "$INTERFACE\t$MAC\t$IP\t$NETMASK\t\t\t$SLAVE\t$LINK\t$SPEED\t$DUPLEX\n"
+        printf "$format" $INTERFACE $MAC $IP $NETMASK $SLAVE $LINK $SPEED $DUPLEX
 done
 
-printf "\n"
-$NETSTAT -rn
+echo ""
+# print routing table
+netstat -rn
