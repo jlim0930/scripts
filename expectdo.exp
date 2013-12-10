@@ -1,0 +1,106 @@
+#!/usr/bin/expect --
+#
+# 0.2 - get login/pass/list of servers/command and run it on all the hosts listed
+# justin lim
+
+
+# SET VARS
+set prompt "\\$|#|>"
+set passprompt "\[Pp\]assword:"
+set timedout ""
+set closed ""
+
+
+# GET VARS
+## set timeout to forever
+set timeout -1
+
+## get ssh username as $userid
+stty echo
+send_user "\nSSH USERNAME : "
+expect_user -re "(.*)\n"
+set userid $expect_out(1,string)
+
+## get ssh password as $pass without echo to console
+stty -echo
+send_user "SSH PASSWORD : "
+expect_user -re "(.*)\n"
+set pass $expect_out(1,string)
+send_user "\n"
+
+## get filename for the file containing the list
+stty echo
+send_user "LIST FILE : "
+expect_user -re "(.*)\n"
+set filename $expect_out(1,string)
+if ![file exists $filename] {
+  error "File $filename does not exist"
+}
+
+## get the command that needs to be ran
+stty echo
+send_user "COMMAND : "
+expect_user -re "(.*)\n"
+set cmd $expect_out(1,string)
+send_user "\n"
+
+set timeout 5
+
+# load the list
+set fid [open $filename]
+set content [read -nonewline $fid]
+close $fid
+set hosts [split $content "\n"]
+
+
+foreach host $hosts {
+  set skip 0
+  send_user "\n\[\*DEBUG\] ====================================> $host \n"
+  spawn ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $userid@$host
+  set timeout 10
+  expect {
+    $passprompt {
+      send "$pass\r"
+      expect -re $prompt
+    }
+    -re $prompt {
+    }
+    timeout {
+      send_user "\n\[\*DEBUG\] ====================================> $host did not respond\n"
+      lappend timedout $host
+      set skip 1
+    }
+    eof {
+      send_user "\n\[\*DEBUG\] ====================================> $host closed!\n"
+      lappend closed $host
+      set skip 1
+    }
+  }
+
+  if {$skip != 1} {
+    expect -re $prompt
+    send "$cmd\n"
+    expect {
+      -re $passprompt { send "$pass\r" }
+      -re $prompt { send "\r" }
+    }
+    expect -re $prompt
+    send "exit"
+  }
+}
+
+# send outputs
+send_user "\n\[\*DEBUG\] ====================================> DONE\n"
+
+send_user "\[\*DEBUG\] ========[llength $timedout] hosts timed-out\n"
+foreach host $timedout {
+  send_user "---- $host\n"
+}
+
+send_user "\[\*DEBUG\] ========[llength $closed] hosts closed early\n"
+foreach host $closed {
+  send_user "---- $host\n"
+}
+
+
+exit
