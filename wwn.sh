@@ -1,35 +1,35 @@
 #!/bin/sh
 
-# native way to get wwn info from the server. 2 different methods kernel 2.4 vs 2.6
+# 0.2 - changed up the script a bit and added some other checks
+# justin
+# get wwn's 
+# if you run it as root you will get the count of HBA's via lspci if not then just wwn's
 
-COUNT=`lspci | egrep -c -i "qlog|emul"`
-FLAG=0
+
+# get vars
+COUNT=`lspci | grep -c -i "Fibre Channel"`
 HOSTNAME=`hostname`
 
-# rhel4 or higher
-RHEL4=0
-if [ `grep -c Nahant /etc/redhat-release` = 1 ]
-then
-RHEL4=1
-fi
-
-if [ $COUNT -ge 1 ]
-then
-FLAG=1
-fi
-
-if [ $FLAG -eq 0 ]
+# if COUNT is 0 then echo output and exit
+if [ $COUNT -eq 0 ]
 then
 echo "No HBAs found on $HOSTNAME"
 exit
 fi
 
-echo "$HOSTNAME WWNs : "
-
-if [ $RHEL4 -eq 1 ]
+# 2.4 qlogic flag
+FLAG=0
+if [ `ls -1 /proc/scsi | grep -c qla` -ge 1 ]
 then
-cat /proc/scsi/qla2xxx/* | grep adapter-port | awk -F= {' print $2 '} | cut -c 1-16
-else
-for i in `ls -1 /sys/class/fc_host/`; do cat /sys/class/fc_host/$i/port_name| sed 's/0x//g'; done
+FLAG=1
 fi
 
+# output
+echo "$HOSTNAME contains $COUNT HBA : "
+
+if [ $FLAG -eq 1 ]
+then
+  cat /proc/scsi/qla2xxx/* | grep adapter-port | awk -F= {' print $2 '} | cut -c 1-16
+else
+  for i in `ls -1 /sys/class/fc_host/`; do echo "WWN : `cat /sys/class/fc_host/$i/port_name | sed 's/0x//g'` PORT STATUS : `cat /sys/class/fc_host/$i/port_state`"; done
+fi
