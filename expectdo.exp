@@ -1,8 +1,9 @@
 #!/usr/bin/expect --
 #
-# 0.2 - get login/pass/list of servers/command and run it on all the hosts listed
-# justin lim
-
+# 0.3 additional optimizations and fixes
+# added paths 
+# removed the 2nd prompt during spawn
+#
 
 # SET VARS
 set prompt "\\$|#|>"
@@ -56,6 +57,7 @@ set hosts [split $content "\n"]
 foreach host $hosts {
   set skip 0
   send_user "\n\[\*DEBUG\] ====================================> $host \n"
+#  log_user 0 # enable this and line 104 if you want to reduce logging
   spawn -noecho ssh -q -t -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $userid@$host
   set timeout 10
   expect {
@@ -76,13 +78,15 @@ foreach host $hosts {
       set skip 1
     }
   }
-
   if {$skip != 1} {
     expect -re $prompt
+    send "export PATH; PATH=\$PATH:/bin:/usr/bin:/usr/local/bin:/sbin:/usr/sbin:/usr/local/sbin:/opt/csw/bin:/opt/csw/sbin:/usr/sfw/bin:/usr/sfw/sbin\n"
+    expect -re $prompt
     send "$cmd\n"
+#    log_user 1
     expect {
       -re $passprompt { send "$pass\r" }
-      -re $prompt { send "\r" }
+      -re $prompt { }
     }
     expect -re $prompt
     send "exit"
