@@ -56,7 +56,7 @@ set hosts [split $content "\n"]
 foreach host $hosts {
   set skip 0
   send_user "\n\[\*DEBUG\] ====================================> $host \n"
-  spawn ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $userid@$host
+  spawn -noecho ssh -q -t -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $userid@$host
   set timeout 10
   expect {
     $passprompt {
