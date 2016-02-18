@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # cleanup OS for template creation
-# version 0.1
+# version 0.2
 # cleans up the OS to turn into template for future deployments
 
 # stop logging services
@@ -9,7 +9,10 @@
 /sbin/service auditd stop
 
 # remove old kernels
+# /usr/bin/yum install yum-utils -y
+# /usr/bin/yum update -y
 /bin/package-cleanup --oldkernels --count=1
+# /usr/bin/yum remove yum-utils -y
 
 # clean out yum
 /usr/bin/yum clean all
@@ -22,13 +25,10 @@
 /bin/rm -f /etc/udev/rules.d/70-*
 
 # remove template MAC and UUID
-if [ -f /etc/sysconfig/network-scripts/ifcfg-eth0 ]; then
-  /bin/sed -i ‘/^(HWADDR|UUID)=/d’ /etc/sysconfig/network-scripts/ifcfg-eth0
-fi
-
-if [ -f /etc/sysconfig/network-scripts/ifcfg-eth1 ]; then
-  /bin/sed -i ‘/^(HWADDR|UUID)=/d’ /etc/sysconfig/network-scripts/ifcfg-eth1
-fi
+for file in `ls -1 /etc/sysconfig/network-scripts/ifcfg-* | grep -v ifcfg-lo`
+do
+  /bin/sed -i '/^(HWADDR|UUID)=/d' ${file}
+done
 
 # clean out tmp
 /bin/rm -rf /tmp/*
@@ -47,3 +47,5 @@ history -c && history -w
 
 # touch /.unconfigured for RHEL6
 touch /.unconfigured
+
+
