@@ -1,5 +1,6 @@
 #!/bin/sh
 
+# test
 # cleanup OS for template creation
 # version 0.2
 # cleans up the OS to turn into template for future deployments
