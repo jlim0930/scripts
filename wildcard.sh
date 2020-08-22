@@ -35,8 +35,8 @@ openssl rsa -passin pass:${PASS} -in ${CA_KEY} -out ${CA_NONCRYPT_KEY}
 # Create CA Cert
 CA_CERT=${DIR}/CA.crt
 [ -f ${CA_CERT} ] ||  rm -rf ${CA_CERT}
-#openssl req -x509 -new -nodes -key ${CA_KEY} -sha256 -days 365 -passin pass:${PASS} -out ${CA_CERT} -subj ${SUBJECT}
-openssl req -x509 -new -nodes -key ${CA_NONCRYPT_KEY} -sha256 -days 365 -out ${CA_CERT} -subj ${SUBJECT}
+openssl req -x509 -new -nodes -key ${CA_KEY} -sha256 -days 365 -passin pass:${PASS} -out ${CA_CERT} -subj ${SUBJECT}
+#openssl req -x509 -new -nodes -key ${CA_NONCRYPT_KEY} -sha256 -days 365 -out ${CA_CERT} -subj ${SUBJECT}
 
 # Create wildcard key
 WILD_KEY=${DIR}/wildcard.key.pem
@@ -84,8 +84,8 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = ${DNS1}
 EOF
-#openssl x509 -req -in ${WILD_CSR} -CA ${CA_CERT} -CAkey ${CA_KEY} -passin pass:${PASS} -CAcreateserial -out ${WILD_CERT} -days 365 -sha256 -extfile ${CERTCONFIG} -extensions req_ext
-openssl x509 -req -in ${WILD_CSR} -CA ${CA_CERT} -CAkey ${CA_NONCRYPT_KEY} -CAcreateserial -out ${WILD_CERT} -days 365 -sha256 -extfile ${CERTCONFIG} -extensions req_ext
+openssl x509 -req -in ${WILD_CSR} -CA ${CA_CERT} -CAkey ${CA_KEY} -passin pass:${PASS} -CAcreateserial -out ${WILD_CERT} -days 365 -sha256 -extfile ${CERTCONFIG} -extensions req_ext
+#openssl x509 -req -in ${WILD_CSR} -CA ${CA_CERT} -CAkey ${CA_NONCRYPT_KEY} -CAcreateserial -out ${WILD_CERT} -days 365 -sha256 -extfile ${CERTCONFIG} -extensions req_ext
 rm -rf ${CERTCONFIG}
 
 # check cert
