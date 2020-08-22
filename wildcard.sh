@@ -46,7 +46,6 @@ openssl genrsa -out ${WILD_KEY} 2048
 # Create wildcard CSR
 CSRCONFIG=/tmp/csrconfig.cnf
 WILD_CSR=wildcard.csr
-PASS2=`openssl rand -base64 48`
 [ ! -f ${CSRCONFIG} ] || rm -rf ${CSRCONFIG}
 cat > ${CSRCONFIG}<<EOF
 [req]
