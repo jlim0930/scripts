@@ -217,7 +217,7 @@ services:
       - 5601:5601
 
   wait_until_ready:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     command: /usr/bin/true
     depends_on: {"es01": {"condition": "service_healthy"}}
 
