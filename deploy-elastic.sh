@@ -7,6 +7,9 @@
 # http and transport ssl will be enabled and kibana ssl will be enabled and the certificate authority file will be copied out to the directory created.
 # temp directory will be created and shared amoung all the containers so if you need to easily move files around like logs or plugins from outside or from container to container you can utilize the temp directory
 # notes file will be created with all the username and passwords for this deployment
+#
+# must have docker and docker-compose.  Also if your containers are shutting down make sure you have enough memory. 
+#
 
 # colors
 red=`tput setaf 1`
