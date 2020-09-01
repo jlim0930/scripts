@@ -32,7 +32,7 @@ if [ $? -ne 0 ]; then
   exit
 fi
 
-docker ps -q > /dev/null 2>&1
+docker ps > /dev/null 2>&1
 if [ $? -ne 0 ]; then
   echo "${red}[DEBUG]${reset} You must be part of the docker group and the daemon must be running"
   exit
@@ -226,14 +226,14 @@ EOF
 
 # perform docker pull to pull down the images ahead of its run
 echo "${green}[DEBUG]${reset} Pulling images"
-docker pull -q docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+docker pull docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
 if [ $? -ne 0 ]; then
   echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of elasticsearch. cleanup and exit"
   rm -rf ${PWD}
   exit
 fi
 
-docker pull -q docker.elastic.co/kibana/kibana:${VERSION}
+docker pull docker.elastic.co/kibana/kibana:${VERSION}
 if [ $? -ne 0 ]; then
   echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of kibana.  cleanup and exit"
   rm -rf ${PWD}
