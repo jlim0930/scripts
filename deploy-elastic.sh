@@ -2,6 +2,9 @@
 
 # justin lim <justin@isthecoolest.ninja>
 
+# $ curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o deploy-elastic.sh
+# $ sh ./deploy-elastic.sh
+#
 # deploys 3 ES instances & 1 kibana instance in docker containers
 # it will create a directory based on the version you input
 # http and transport ssl will be enabled and kibana ssl will be enabled and the certificate authority file will be copied out to the directory created.
