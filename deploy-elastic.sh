@@ -62,6 +62,7 @@ COMPOSE_PROJECT_NAME=es
 CERTS_DIR=/usr/share/elasticsearch/config/certificates
 KIBANA_CERTS_DIR=/usr/share/kibana/config/certificates
 ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+COMPOSE_HTTP_TIMEOUT=600
 EOF
 
 # create instances file
