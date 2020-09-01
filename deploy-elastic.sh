@@ -279,7 +279,7 @@ EOF
 
 # restart kibana
 echo "${green}[DEBUG]${reset} Restarting kibana to pick up the new elastic password"
-docker restart kibanaA
+docker restart kibana
 
 # copy the certificate authority into the homedir for the project
 echo "${green}[DEBUG}${reset} Copying the certificate authority into the project folder"
