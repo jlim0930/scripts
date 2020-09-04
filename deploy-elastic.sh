@@ -1,62 +1,124 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
 
 # justin lim <justin@isthecoolest.ninja>
 
 # $ curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o deploy-elastic.sh
 # $ sh ./deploy-elastic.sh
 #
-# deploys 3 ES instances & 1 kibana instance in docker containers
-# it will create a directory based on the version you input
-# http and transport ssl will be enabled and kibana ssl will be enabled and the certificate authority file will be copied out to the directory created.
-# temp directory will be created and shared amoung all the containers so if you need to easily move files around like logs or plugins from outside or from container to container you can utilize the temp directory
-# notes file will be created with all the username and passwords for this deployment
-#
-# must have docker and docker-compose.  Also if your containers are shutting down make sure you have enough memory. 
-#
+# Deploys 3 instances of ES into a cluster and 1 instance of kibana
+# works for all 6.x 7.x versions
+# Creates a directory of ${VERSION} on your current directory
+# All passwords are generated and stored in ${VERSION}/notes
+# All traffic is SSL encrypted and the certificate authority is stored in ${VERSION/ca.crt
+# ${VERSION}/temp is mounted as /temp on all containers so its easy to move files around
+# ${VERSION}/kibana.yml can be edited and kibana container restarted for features
+
+# must have docker and docker-compose installed and be part of docker group
+
+# cleanup.sh is created in ${VERSION} which will clean up and remove deployment
+
+# Once the deployment is complete you can goto https://IPofHost:5601
+
+
+# set basedir
+BASEDIR=$(pwd)
 
 # colors
 red=`tput setaf 1`
 green=`tput setaf 2`
 reset=`tput sgr0`
 
-# check for binaries
-which docker > /dev/null 2>&1
+# get version and set major minor bugfix or print help
+if [ -z ${1} ]; then
+  echo "${green}Usage:${reset} ./`basename $0` {VERSION}  ${green}EXAMPLE${reset} ./deploy-elastic.sh 7.9.0  ${red}Only works for 6.x and 7.x${reset}"
+  exit
+else
+  VERSION=${1}
+  re="^[6-8]{1}[.][0-9]{1,2}[.][0-9]{1,2}$"
+  if [[ ${1} =~ ${re} ]]; then
+    MAJOR="$(echo ${1} | awk -F. '{ print $1 }')"
+    MINOR="$(echo ${1} | awk -F. '{ print $2 }')"
+    BUGFIX="$(echo ${1} | awk -F. '{ print $3 }')"
+  else
+    echo "${green}Usage:${reset} ./`basename $0` {VERSION}  ${red}Please use Full valid versions such as 7.9.0${reset}"
+    exit
+  fi
+fi
+
+# check to ensure docker is running and you can run docker commands
+docker info >/dev/null 2>&1
 if [ $? -ne 0 ]; then
-  echo "${red}[DEBUG]${reset} You must install docker first"
+  echo "${red}[DEBUG]${reset} Docker is not running or you are not part of the docker group"
   exit
 fi
 
-which docker-compose > /dev/null 2>&1
+# check to ensure docker-compose is installed
+docker-compose version >/dev/null 2>&1
 if [ $? -ne 0 ]; then
-  echo "${red}[DEBUG}${reset} You must install docker-compose first"
+  echo "${red}[DEBUG]${reset} docker-compose is not installed.  Please install and try again"
   exit
 fi
 
-docker ps > /dev/null 2>&1
+# check to see if containers/networks/volumes exists
+for name in es01 es02 es03 kibana
+do
+  if [ $(docker ps -a --format '{{.Names}}' | grep -c ${name}) -ge 1  ]; then
+    echo "${red}[DEBUG]${reset} Container ${green}${name}${reset} exists.  Please remove and try again"
+    exit
+  fi
+done
+for name in es_default
+do
+  if [ $(docker network ls --format '{{.Name}}' | grep -c ${name}) -ge 1 ]; then
+    echo "${red}[DEBUG]${reset} Network ${green}${name}${reset} exists.  Please remove and try again"
+    exit
+  fi
+done
+for name in es_data01 es_data02 es_data03 es_certs
+do
+  if [ $(docker volume ls --format '{{.Name}}' | grep -c ${name}) -ge 1 ]; then
+    echo "${red}[DEBUG]${reset} Volume ${green}${name}${reset} exists.  Please remove and try again"
+    exit
+  fi
+done
+
+# docker pull image and if unable to pull exit
+echo "${green}[DEBUG]${reset} Pulling ${VERSION} images... might take a while"
+docker pull docker.elastic.co/elasticsearch/elasticsearch:${VERSION} >/dev/null 2>&1
 if [ $? -ne 0 ]; then
-  echo "${red}[DEBUG]${reset} You must be part of the docker group and the daemon must be running"
+  echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of elasticsearch. valid version? exiting"
   exit
 fi
 
-# read version
-echo "Please enter the version you wish to run (eg. 7.9.0) "
-read VERSION
+docker pull docker.elastic.co/kibana/kibana:${VERSION} >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of kibana.  valid version? exiting"
+  exit
+fi
 
-# mkdir on the version and change to dir
-mkdir "${VERSION}"
-cd "${VERSION}"
-PWD=`pwd`
+########################################################################################################
+# all the checks are done now to start building!
 
-# make a temp directory to share between the containers in case you want to add/remove some troubleshooting things
-mkdir -p ${PWD}/temp
+# create directory structure and needed files
+WORKDIR="${BASEDIR}/${VERSION}"
+mkdir -p ${WORKDIR}
+cd ${WORKDIR}
+mkdir temp
+echo "${green}[DEBUG]${reset} Created ${VERSION} directory and some files"
 
-# set inital elastic password
+# generate temp elastic password
 ELASTIC_PASSWORD=`openssl rand -base64 29 | tr -d "=+/" | cut -c1-25`
 echo "${green}[DEBUG]${reset} Setting temp password for elastic as ${ELASTIC_PASSWORD}"
 
+# create temp kibana.yml
+cat > kibana.yml<<EOF
+elasticsearch.user: "elstic"
+elasticsearch.password: "${ELASTIC_PASSWORD}"
+EOF
+
 # create env file
 echo "${green}[DEBUG]${reset} Creating .env file"
-
 cat > .env<<EOF
 COMPOSE_PROJECT_NAME=es
 CERTS_DIR=/usr/share/elasticsearch/config/certificates
@@ -67,7 +129,6 @@ EOF
 
 # create instances file
 echo "${green}[DEBUG]${reset} Creating instances.yml"
-
 cat > instances.yml<<EOF
 instances:
   - name: es01
@@ -99,10 +160,11 @@ instances:
       - 127.0.0.1
 EOF
 
-# create create-certs.yml
-echo "${green}[DEBUG]${reset} Creating create-certs.yml"
-
-cat > create-certs.yml<<EOF
+# create create-certs.yml & docker-compose.yml
+if [ ${MAJOR} = "7" ]; then
+  # create create-certs.yml
+  echo "${green}[DEBUG]${reset} Creating create-certs.yml"
+  cat > create-certs.yml<<EOF
 version: '2.2'
 
 services:
@@ -124,10 +186,9 @@ services:
 volumes: {"certs"}
 EOF
 
-# create docker-compose.yml
-echo "${green}[DEBUG]${reset} Creating docker-compose.yml"
-
-cat > docker-compose.yml<<EOF
+  # create docker-compose.yml
+  echo "${green}[DEBUG]${reset} Creating docker-compose.yml"
+  cat > docker-compose.yml<<EOF
 version: '2.2'
 
 services:
@@ -136,9 +197,11 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es01
+      - cluster.name=docker-cluster
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
@@ -151,11 +214,15 @@ services:
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es01/es01.key
-    volumes: ['data01:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', '${PWD}/temp:/temp']
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes: ['data01:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
     ports:
       - 9200:9200
     healthcheck:
-      test: curl --cacert \$CERTS_DIR/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ \$\$? == 52 ]]; then echo 0; else echo 1; fi
+      test: curl --cacert \$CERTS_DIR/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
       timeout: 10s
       retries: 5
@@ -165,9 +232,11 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es02
+      - cluster.name=docker-cluster
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
@@ -180,100 +249,233 @@ services:
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es02/es02.key
-    volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', '${PWD}/temp:/temp']
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
 
   es03:
     container_name: es03
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es03
+      - cluster.name=docker-cluster
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
-      - xpack.security.http.ssl.key=\$CERTS_DIR/es03/es03.key
+      - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
-      - xpack.security.http.ssl.certificate=\$CERTS_DIR/es03/es03.crt
+      - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.enabled=true
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
-      - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es03/es03.crt
-      - xpack.security.transport.ssl.key=\$CERTS_DIR/es03/es03.key
-    volumes: ['data03:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', '${PWD}/temp:/temp']
-
-  kibana:
-    container_name: kibana
-    image:  docker.elastic.co/kibana/kibana:${VERSION}
-    environment:
-      - ELASTICSEARCH_HOSTS=https://es01:9200
-      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=\$KIBANA_CERTS_DIR/ca/ca.crt
-      - SERVER_SSL_CERTIFICATE=\$KIBANA_CERTS_DIR/kibana/kibana.crt
-      - SERVER_SSL_KEY=\$KIBANA_CERTS_DIR/kibana/kibana.key
-      - SERVER_SSL_ENABLED=true
-    volumes: ['${PWD}/kibana.yml:/usr/share/kibana/config/kibana.yml', 'certs:\$KIBANA_CERTS_DIR', '${PWD}/temp:/temp']
-    ports:
-      - 5601:5601
+      - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es02/es02.crt
+      - xpack.security.transport.ssl.key=\$CERTS_DIR/es02/es02.key
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes: ['data03:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
 
   wait_until_ready:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     command: /usr/bin/true
     depends_on: {"es01": {"condition": "service_healthy"}}
 
+  kibana:
+    container_name: kibana
+    image:  docker.elastic.co/kibana/kibana:${VERSION}
+    environment:
+      - SERVER_NAME=kibana
+      - SERVER_HOST="0"
+      - ELASTICSEARCH_HOSTS=https://es01:9200
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=\$KIBANA_CERTS_DIR/ca/ca.crt
+      - SERVER_SSL_CERTIFICATE=\$KIBANA_CERTS_DIR/kibana/kibana.crt
+      - SERVER_SSL_KEY=\$KIBANA_CERTS_DIR/kibana/kibana.key
+      - SERVER_SSL_ENABLED=true
+    volumes: ['./kibana.yml:/usr/share/kibana/config/kibana.yml', 'certs:\$KIBANA_CERTS_DIR', './temp:/temp']
+    ports:
+      - 5601:5601
+
 volumes: {"data01", "data02", "data03", "certs"}
 EOF
 
-# perform docker pull to pull down the images ahead of its run
-echo "${green}[DEBUG]${reset} Pulling images"
-docker pull docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
-if [ $? -ne 0 ]; then
-  echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of elasticsearch. cleanup and exit"
-  rm -rf ${PWD}
-  exit
-fi
+elif [ ${MAJOR} = "6" ]; then
+  # create create-certs.yml
+  echo "${green}[DEBUG]${reset} Creating create-certs.yml"
+  cat > create-certs.yml<<EOF
+version: '2.2'
 
-docker pull docker.elastic.co/kibana/kibana:${VERSION}
-if [ $? -ne 0 ]; then
-  echo "${red}[DEBUG]${reset} Unable to pull ${VERSION} of kibana.  cleanup and exit"
-  rm -rf ${PWD}
-  exit
+services:
+  create_certs:
+    container_name: create_certs
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    command: >
+      bash -c '
+        if [[ ! -d config/certificates/certs ]]; then
+          mkdir config/certificates/certs;
+        fi;
+        if [[ ! -f /local/certs/bundle.zip ]]; then
+          bin/elasticsearch-certgen --silent --in config/certificates/instances.yml --out config/certificates/certs/bundle.zip;
+          unzip config/certificates/certs/bundle.zip -d config/certificates/certs;
+        fi;
+        chgrp -R 0 config/certificates/certs
+      '
+    user: \${UID:-1000}
+    working_dir: /usr/share/elasticsearch
+    volumes: ['.:/usr/share/elasticsearch/config/certificates']
+EOF
+
+  # create docker-compose.yml
+  echo "${green}[DEBUG]${reset} Creating docker-compose.yml"
+  cat > docker-compose.yml<<EOF
+version: '2.2'
+
+services:
+  es01:
+    container_name: es01
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    environment:
+      - node.name=es01
+      - cluster.name=docker-cluster
+      - discovery.zen.minimum_master_nodes=2
+      - discovery.zen.ping.unicast.hosts=es01,es02,es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.license.self_generated.type=trial
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
+      - xpack.ssl.certificate=\$CERTS_DIR/es01/es01.crt
+      - xpack.ssl.key=\$CERTS_DIR/es01/es01.key
+    volumes: ['data01:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+    ports:
+      - 9200:9200
+    healthcheck:
+      test: curl --cacert \$CERTS_DIR/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
+      interval: 30s
+      timeout: 10s
+      retries: 25
+
+  es02:
+    container_name: es02
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    environment:
+      - node.name=es02
+      - cluster.name=docker-cluster
+      - discovery.zen.minimum_master_nodes=2
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - discovery.zen.ping.unicast.hosts=es01,es02,es03
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.license.self_generated.type=trial
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
+      - xpack.ssl.certificate=\$CERTS_DIR/es02/es02.crt
+      - xpack.ssl.key=\$CERTS_DIR/es02/es02.key
+    volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+
+  es03:
+    container_name: es03
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    environment:
+      - node.name=es03
+      - cluster.name=docker-cluster
+      - discovery.zen.minimum_master_nodes=2
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - discovery.zen.ping.unicast.hosts=es01,es02,es03
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.license.self_generated.type=trial
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
+      - xpack.ssl.certificate=\$CERTS_DIR/es02/es02.crt
+      - xpack.ssl.key=\$CERTS_DIR/es02/es02.key
+    volumes: ['data03:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+
+  wait_until_ready:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    command: /usr/bin/true
+    depends_on: {"es01": {"condition": "service_healthy"}}
+
+  kibana:
+    container_name: kibana
+    image: docker.elastic.co/kibana/kibana:${VERSION}
+    environment:
+      - SERVER_NAME=kibana
+      - SERVER_HOST="0"
+      - ELASTICSEARCH_HOSTS=https://es01:9200
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=\$KIBANA_CERTS_DIR/ca/ca.crt
+      - SERVER_SSL_CERTIFICATE=\$KIBANA_CERTS_DIR/kibana/kibana.crt
+      - SERVER_SSL_KEY=\$KIBANA_CERTS_DIR/kibana/kibana.key
+      - SERVER_SSL_ENABLED=true
+    volumes: ['./kibana.yml:/usr/share/kibana/config/kibana.yml', './certs:\$KIBANA_CERTS_DIR', './temp:/temp']
+    ports:
+      - 5601:5601
+
+
+volumes: {"data01": {"driver": "local"}, "data02": {"driver": "local"}, "data03": {"driver": "local"}}
+EOF
+
 fi
 
 # create certificates
 echo "${green}[DEBUG]${reset} Create certificates"
 docker-compose -f create-certs.yml run --rm create_certs
 
-# touch kibana.yml for docker-compose up
-touch ${PWD}/kibana.yml
-
 # start cluster
 echo "${green}[DEBUG]${reset} Starting our deployment"
 docker-compose up -d
 
 # wait for cluster to be healthy
-while true
-do
-  if [ `docker run --rm -v es_certs:/certs --network=es_default docker.elastic.co/elasticsearch/elasticsearch:${VERSION} curl -s --cacert /certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} https://es01:9200/_cluster/health | grep -c green` = 1 ]; then
-  break
-  else
-    echo "${green}[DEBUG]${reset} Waiting for cluster to turn green to set passwords..."
-  fi
-  sleep 10
-done
-
+if [ ${MAJOR} = "7" ]; then
+  while true
+  do
+    if [ `docker run --rm -v es_certs:/certs --network=es_default docker.elastic.co/elasticsearch/elasticsearch:${VERSION} curl -s --cacert /certs/ca/ca.crt -u elastic:${ELASTIC_PASSWORD} https://es01:9200/_cluster/health | grep -c green` = 1 ]; then
+      break
+    else
+      echo "${green}[DEBUG]${reset} Waiting for cluster to turn green to set passwords..."
+    fi
+    sleep 10
+  done
+elif [ ${MAJOR} = "6" ]; then
+  while true
+  do
+    if [ `curl --cacert certs/ca/ca.crt -s -u elastic:${ELASTIC_PASSWORD} https://localhost:9200/_cluster/health | grep -c green` = 1 ]; then
+      break
+    else
+      echo "${green}[DEBUG]${reset} Waiting for cluster to turn green to set passwords..."
+    fi
+    sleep 10
+  done
+fi
 
 # setup passwords
 echo "${green}[DEBUG]${reset} Setting passwords and storing it in ${PWD}/notes"
-docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch --url https://localhost:9200" | tee -a notes
+if [ ${MAJOR} = "7" ]; then
+  docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch --url https://localhost:9200" | tee -a notes
+elif [ ${MAJOR} = "6" ]; then
+#  docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch -Expack.ssl.certificate=certificates/es01/es01.crt -Expack.ssl.certificate_authorities=certificates/ca/ca.crt -Expack.ssl.key=certificates/es01/es01.key --url https://localhost:9200" | tee -a notes
+  docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch -Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt --url https://localhost:9200" | tee -a notes
+fi
 
+# grab the new elastic password
 PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
 
 # create kibana.yml
 cat > kibana.yml<<EOF
-server.port: 5601
-server.host: "0"
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 EOF
@@ -283,10 +485,41 @@ echo "${green}[DEBUG]${reset} Restarting kibana to pick up the new elastic passw
 docker restart kibana
 
 # copy the certificate authority into the homedir for the project
-echo "${green}[DEBUG}${reset} Copying the certificate authority into the project folder"
-docker exec es01 /bin/bash -c "cp /usr/share/elasticsearch/config/certificates/ca/ca.crt /temp/ca.crt"
-mv ${PWD}/temp/ca.crt ${PWD}/
+echo "${green}[DEBUG]${reset} Copying the certificate authority into the project folder"
+if [ ${MAJOR} = "7" ]; then
+  docker exec es01 /bin/bash -c "cp /usr/share/elasticsearch/config/certificates/ca/ca.* /temp/"
+  mv ${WORKDIR}/temp/ca.* ${WORKDIR}/
+elif [ ${MAJOR} = "6" ]; then
+  cp ${WORKDIR}/certs/ca/ca.* ${WORKDIR}/
+fi
+
+# create cleanup script
+echo "${green}[DEBUG]${reset} Creating cleanup script to cleanup this deployment"
+
+cat > cleanup.sh<<EOF
+#!/bin/sh
+
+echo "${green}[DEBUG]${reset} Removing es01,es02,es03,kibana,es_default network,es_data01,es_data02,es_data03,es_certs volumes"
+
+docker-compose down >/dev/null 2>&1
+docker rm es01 >/dev/null 2>&1
+docker rm es02 >/dev/null 2>&1
+docker rm es03 >/dev/null 2>&1
+docker rm kibana >/dev/null 2>&1
+docker network rm es_default >/dev/null 2>&1
+docker volume rm es_data01 >/dev/null 2>&1
+docker volume rm es_data02 >/dev/null 2>&1
+docker volume rm es_data03 >/dev/null 2>&1
+docker volume rm es_certs >/dev/null 2>&1
+
+cd ${BASEDIR}
+rm -rf ${WORKDIR}
+EOF
+chmod a+x cleanup.sh
+
+
 
 echo "${green}[DEBUG]${reset} Complete.  "
 echo ""
-echo "To tear down and cleanup later goto \"${PWD}\" and run \"docker-compose down --rmi all -v\" then remove \"${PWD}\""
+
+
