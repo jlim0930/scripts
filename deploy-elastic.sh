@@ -4,7 +4,7 @@
 # justin lim <justin@isthecoolest.ninja>
 
 # $ curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o deploy-elastic.sh
-# $ sh ./deploy-elastic.sh
+# $ sh ./deploy-elastic.sh {VERSION}
 #
 # Deploys 3 instances of ES into a cluster and 1 instance of kibana
 # works for all 6.x 7.x versions
