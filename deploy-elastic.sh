@@ -46,6 +46,9 @@ else
   fi
 fi
 
+# set vm.max_map_count
+sysctl -w vm.max_map_count=262144
+
 # check to ensure docker is running and you can run docker commands
 docker info >/dev/null 2>&1
 if [ $? -ne 0 ]; then
