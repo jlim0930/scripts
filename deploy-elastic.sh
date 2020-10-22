@@ -46,8 +46,13 @@ else
   fi
 fi
 
-# set vm.max_map_count
-sysctl -w vm.max_map_count=262144
+# check vm.max_map_count
+COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
+if [ ${COUNT} -le "262144" ]; then
+  echo "${green}[DEBUG]${reset} vm.max_map_count is ${COUNT}"
+else
+  echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
+fi
 
 # check to ensure docker is running and you can run docker commands
 docker info >/dev/null 2>&1
@@ -110,6 +115,30 @@ cd ${WORKDIR}
 mkdir temp
 echo "${green}[DEBUG]${reset} Created ${VERSION} directory and some files"
 
+# create cleanup script
+echo "${green}[DEBUG]${reset} Creating cleanup script to cleanup this deployment"
+
+cat > cleanup.sh<<EOF
+#!/bin/sh
+
+echo "${green}[DEBUG]${reset} Removing es01,es02,es03,kibana,es_default network,es_data01,es_data02,es_data03,es_certs volumes"
+
+docker-compose down >/dev/null 2>&1
+docker rm es01 >/dev/null 2>&1
+docker rm es02 >/dev/null 2>&1
+docker rm es03 >/dev/null 2>&1
+docker rm kibana >/dev/null 2>&1
+docker network rm es_default >/dev/null 2>&1
+docker volume rm es_data01 >/dev/null 2>&1
+docker volume rm es_data02 >/dev/null 2>&1
+docker volume rm es_data03 >/dev/null 2>&1
+docker volume rm es_certs >/dev/null 2>&1
+
+cd ${BASEDIR}
+rm -rf ${WORKDIR}
+EOF
+chmod a+x cleanup.sh
+
 # generate temp elastic password
 ELASTIC_PASSWORD=`openssl rand -base64 29 | tr -d "=+/" | cut -c1-25`
 echo "${green}[DEBUG]${reset} Setting temp password for elastic as ${ELASTIC_PASSWORD}"
@@ -167,7 +196,8 @@ EOF
 if [ ${MAJOR} = "7" ]; then
   # create create-certs.yml
   echo "${green}[DEBUG]${reset} Creating create-certs.yml"
-  cat > create-certs.yml<<EOF
+  if [ ${MINOR} -ge "6" ]; then
+    cat > create-certs.yml<<EOF
 version: '2.2'
 
 services:
@@ -188,6 +218,30 @@ services:
 
 volumes: {"certs"}
 EOF
+    else
+      cat > create-certs.yml<<EOF
+version: '2.2'
+
+services:
+  create_certs:
+    container_name: create_certs
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.5.2
+    command: >
+      bash -c '
+        yum install -y -q -e 0 unzip;
+        if [[ ! -f /certs/bundle.zip ]]; then
+          bin/elasticsearch-certutil cert --silent --pem --in config/certificates/instances.yml -out /certs/bundle.zip;
+          unzip /certs/bundle.zip -d /certs; 
+        fi;
+        chown -R 1000:0 /certs
+      '
+    user: "0"
+    working_dir: /usr/share/elasticsearch
+    volumes: ['certs:/certs', '.:/usr/share/elasticsearch/config/certificates']
+
+volumes: {"certs"}
+EOF
+    fi
 
   # create docker-compose.yml
   echo "${green}[DEBUG]${reset} Creating docker-compose.yml"
@@ -468,7 +522,16 @@ fi
 # setup passwords
 echo "${green}[DEBUG]${reset} Setting passwords and storing it in ${PWD}/notes"
 if [ ${MAJOR} = "7" ]; then
-  docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch --url https://localhost:9200" | tee -a notes
+  if [ ${MINOR} -ge "6" ]; then
+    docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch --url https://localhost:9200" | tee -a notes
+  else
+    docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords \
+auto --batch \
+-Expack.security.http.ssl.certificate=certificates/es01/es01.crt \
+-Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt \
+-Expack.security.http.ssl.key=certificates/es01/es01.key \
+--url https://localhost:9200" | tee -a notes
+  fi
 elif [ ${MAJOR} = "6" ]; then
 #  docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch -Expack.ssl.certificate=certificates/es01/es01.crt -Expack.ssl.certificate_authorities=certificates/ca/ca.crt -Expack.ssl.key=certificates/es01/es01.key --url https://localhost:9200" | tee -a notes
   docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch -Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt --url https://localhost:9200" | tee -a notes
@@ -496,33 +559,6 @@ elif [ ${MAJOR} = "6" ]; then
   cp ${WORKDIR}/certs/ca/ca.* ${WORKDIR}/
 fi
 
-# create cleanup script
-echo "${green}[DEBUG]${reset} Creating cleanup script to cleanup this deployment"
-
-cat > cleanup.sh<<EOF
-#!/bin/sh
-
-echo "${green}[DEBUG]${reset} Removing es01,es02,es03,kibana,es_default network,es_data01,es_data02,es_data03,es_certs volumes"
-
-docker-compose down >/dev/null 2>&1
-docker rm es01 >/dev/null 2>&1
-docker rm es02 >/dev/null 2>&1
-docker rm es03 >/dev/null 2>&1
-docker rm kibana >/dev/null 2>&1
-docker network rm es_default >/dev/null 2>&1
-docker volume rm es_data01 >/dev/null 2>&1
-docker volume rm es_data02 >/dev/null 2>&1
-docker volume rm es_data03 >/dev/null 2>&1
-docker volume rm es_certs >/dev/null 2>&1
-
-cd ${BASEDIR}
-rm -rf ${WORKDIR}
-EOF
-chmod a+x cleanup.sh
-
-
-
 echo "${green}[DEBUG]${reset} Complete.  "
 echo ""
-
 
