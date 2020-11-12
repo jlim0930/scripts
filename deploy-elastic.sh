@@ -458,8 +458,8 @@ services:
       - xpack.security.transport.ssl.enabled=true
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
-      - xpack.ssl.certificate=\$CERTS_DIR/es02/es02.crt
-      - xpack.ssl.key=\$CERTS_DIR/es02/es02.key
+      - xpack.ssl.certificate=\$CERTS_DIR/es03/es03.crt
+      - xpack.ssl.key=\$CERTS_DIR/es03/es03.key
     volumes: ['data03:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
 
   wait_until_ready:
