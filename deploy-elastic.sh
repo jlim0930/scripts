@@ -326,14 +326,14 @@ services:
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
-      - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
+      - xpack.security.http.ssl.key=\$CERTS_DIR/es03/es03.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
-      - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
+      - xpack.security.http.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.security.transport.ssl.enabled=true
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
-      - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es02/es02.crt
-      - xpack.security.transport.ssl.key=\$CERTS_DIR/es02/es02.key
+      - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es03/es03.crt
+      - xpack.security.transport.ssl.key=\$CERTS_DIR/es03/es03.key
     ulimits:
       memlock:
         soft: -1
