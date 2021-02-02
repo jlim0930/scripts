@@ -39,6 +39,10 @@ bootstrap () {
 
 gitpush () {
     cd ~/wiki
+    if [ ! -f ~/wiki/.gitignore ]; then
+      cat > ~/wiki/.gitignore<<EOF
+log/*/*.log
+EOF
     git add .
     git commit -m "wiki updated ${DATE}"
     git branch -M main
