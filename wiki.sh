@@ -10,7 +10,7 @@
 # 2 your container name will be wiki
 
 # Please edit vars below
-GHUSERNAME="jlim0930"
+GHUSERNAME="USERNAME"
 PORT="9090"
 
 # colors
