@@ -5,12 +5,13 @@
 # Please create a github repo named wiki and set it to private.
 # setup ssh keys for github for this script to work correctly
 
+
 # Assumptions:
 # 1 the wiki will be placed in your homedir/wiki
 # 2 your container name will be wiki
 
 # Please edit vars below
-GHUSERNAME="USERNAME"
+GHUSERNAME="jlim0930"
 PORT="9090"
 
 # colors
@@ -43,6 +44,7 @@ gitpush () {
       cat > ~/wiki/.gitignore<<EOF
 log/*/*.log
 EOF
+    fi
     git add .
     git commit -m "wiki updated ${DATE}"
     git branch -M main
@@ -114,3 +116,4 @@ case $1 in
         echo "Please create your github repo first"
         ;;
 esac
+
