@@ -50,6 +50,7 @@ gitpush () {
 
 gitpull () {
     cd ~/wiki
+    git reset --hard
     git pull --rebase
     if [ $? -ne 0 ]; then
       echo "${red}[DEBUG]${reset} Unable to pull from github"
