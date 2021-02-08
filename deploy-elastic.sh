@@ -47,12 +47,12 @@ else
 fi
 
 # check vm.max_map_count
-COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
-if [ ${COUNT} -le "262144" ]; then
-  echo "${green}[DEBUG]${reset} vm.max_map_count is ${COUNT}"
-else
-  echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
-fi
+#COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
+#if [ ${COUNT} -le "262144" ]; then
+#  echo "${green}[DEBUG]${reset} vm.max_map_count is ${COUNT}"
+#else
+#  echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
+#fi
 
 # check to ensure docker is running and you can run docker commands
 docker info >/dev/null 2>&1
