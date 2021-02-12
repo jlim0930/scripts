@@ -47,12 +47,15 @@ else
 fi
 
 # check vm.max_map_count
-#COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
-#if [ ${COUNT} -le "262144" ]; then
-#  echo "${green}[DEBUG]${reset} vm.max_map_count is ${COUNT}"
-#else
-#  echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
-#fi
+if [ "`uname -s`" != "Darwin" ]; then
+  COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
+  if [ ${COUNT} -le "262144" ]; then
+    echo "${green}[DEBUG]${reset} vm.max_map_count is ${COUNT}... proceeding"
+  else
+    echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
+    exit;
+  fi
+fi
 
 # check to ensure docker is running and you can run docker commands
 docker info >/dev/null 2>&1
@@ -113,6 +116,11 @@ WORKDIR="${BASEDIR}/${VERSION}"
 mkdir -p ${WORKDIR}
 cd ${WORKDIR}
 mkdir temp
+cat > elasticsearch.yml<<EOF
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+EOF
+chown 1000 elasticsearch.yml
 echo "${green}[DEBUG]${reset} Created ${VERSION} directory and some files"
 
 # create cleanup script
@@ -231,7 +239,7 @@ services:
         yum install -y -q -e 0 unzip;
         if [[ ! -f /certs/bundle.zip ]]; then
           bin/elasticsearch-certutil cert --silent --pem --in config/certificates/instances.yml -out /certs/bundle.zip;
-          unzip /certs/bundle.zip -d /certs; 
+          unzip /certs/bundle.zip -d /certs;
         fi;
         chown -R 1000:0 /certs
       '
@@ -275,7 +283,7 @@ services:
       memlock:
         soft: -1
         hard: -1
-    volumes: ['data01:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data01:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
     ports:
       - 9200:9200
     healthcheck:
@@ -310,7 +318,7 @@ services:
       memlock:
         soft: -1
         hard: -1
-    volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
 
   es03:
     container_name: es03
@@ -338,7 +346,7 @@ services:
       memlock:
         soft: -1
         hard: -1
-    volumes: ['data03:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data03:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
 
   wait_until_ready:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
@@ -353,6 +361,7 @@ services:
       - SERVER_HOST="0"
       - ELASTICSEARCH_HOSTS=https://es01:9200
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=\$KIBANA_CERTS_DIR/ca/ca.crt
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate
       - SERVER_SSL_CERTIFICATE=\$KIBANA_CERTS_DIR/kibana/kibana.crt
       - SERVER_SSL_KEY=\$KIBANA_CERTS_DIR/kibana/kibana.key
       - SERVER_SSL_ENABLED=true
@@ -413,7 +422,7 @@ services:
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.ssl.key=\$CERTS_DIR/es01/es01.key
-    volumes: ['data01:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data01:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
     ports:
       - 9200:9200
     healthcheck:
@@ -440,7 +449,7 @@ services:
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.ssl.key=\$CERTS_DIR/es02/es02.key
-    volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
 
   es03:
     container_name: es03
@@ -460,7 +469,7 @@ services:
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.ssl.key=\$CERTS_DIR/es03/es03.key
-    volumes: ['data03:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp']
+    volumes: ['data03:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
 
   wait_until_ready:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
@@ -475,6 +484,7 @@ services:
       - SERVER_HOST="0"
       - ELASTICSEARCH_HOSTS=https://es01:9200
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=\$KIBANA_CERTS_DIR/ca/ca.crt
+      - ELASTICSEARCH_SSL_VERIFICATIONMODE=certificate
       - SERVER_SSL_CERTIFICATE=\$KIBANA_CERTS_DIR/kibana/kibana.crt
       - SERVER_SSL_KEY=\$KIBANA_CERTS_DIR/kibana/kibana.key
       - SERVER_SSL_ENABLED=true
@@ -540,11 +550,36 @@ fi
 # grab the new elastic password
 PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
 
+# generate kibana encryption key
+ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
+
 # create kibana.yml
-cat > kibana.yml<<EOF
+
+if [ ${MAJOR} = "6" ]; then
+  cat > kibana.yml<<EOF
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
+xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
 EOF
+elif [ ${MAJOR} = "7" ]; then
+  if [ ${MINOR} -lt "7" ]; then
+    cat > kibana.yml<<EOF
+elasticsearch.username: "elastic"
+elasticsearch.password: "${PASSWD}"
+xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
+EOF
+  elif [ ${MINOR} -ge "7" ]; then
+    cat > kibana.yml<<EOF
+elasticsearch.username: "elastic"
+elasticsearch.password: "${PASSWD}"
+xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.encryptedSavedObjects.encryptionKey: "${ENCRYPTION_KEY}"
+EOF
+  fi
+fi
 
 # restart kibana
 echo "${green}[DEBUG]${reset} Restarting kibana to pick up the new elastic password"
@@ -561,4 +596,3 @@ fi
 
 echo "${green}[DEBUG]${reset} Complete.  "
 echo ""
-
