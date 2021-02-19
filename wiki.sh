@@ -39,6 +39,10 @@ bootstrap () {
 }
 
 gitpush () {
+    if [ ! -d ~/wiki ]; then
+        echo "${red}[DEBUG]${reset} ~/wiki does not exist so nothing to push."
+        exit
+    fi
     cd ~/wiki
     if [ ! -f ~/wiki/.gitignore ]; then
       cat > ~/wiki/.gitignore<<EOF
@@ -116,4 +120,3 @@ case $1 in
         echo "Please create your github repo first"
         ;;
 esac
-
