@@ -420,6 +420,7 @@ services:
     volumes: ['data01:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
     ports:
       - 9200:9200
+    restart: on-failure
     healthcheck:
       test: curl --cacert \$CERTS_DIR/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
@@ -455,6 +456,7 @@ services:
     labels:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
+    restart: on-failure
 
   es03:
     container_name: es03
@@ -485,6 +487,7 @@ services:
     labels:
       co.elastic.logs/module: elasticsearch
     volumes: ['data03:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
+    restart: on-failure
 
 
   wait_until_ready:
@@ -509,6 +512,7 @@ services:
     volumes: ['./kibana.yml:/usr/share/kibana/config/kibana.yml', 'certs:\$KIBANA_CERTS_DIR', './temp:/temp']
     ports:
       - 5601:5601
+    restart: on-failure
 
 volumes: {"data01", "data02", "data03", "certs"}
 EOF
@@ -568,6 +572,7 @@ services:
     volumes: ['data01:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
     ports:
       - 9200:9200
+    restart: on-failure
     healthcheck:
       test: curl --cacert \$CERTS_DIR/ca/ca.crt -s https://localhost:9200 >/dev/null; if [[ $$? == 52 ]]; then echo 0; else echo 1; fi
       interval: 30s
@@ -595,6 +600,7 @@ services:
     labels:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
+    restart: on-failure
 
   es03:
     container_name: es03
@@ -617,6 +623,7 @@ services:
     labels:
       co.elastic.logs/module: elasticsearch
     volumes: ['data03:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './temp:/temp', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml']
+    restart: on-failure
 
   wait_until_ready:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
@@ -640,6 +647,7 @@ services:
     volumes: ['./kibana.yml:/usr/share/kibana/config/kibana.yml', './certs:\$KIBANA_CERTS_DIR', './temp:/temp']
     ports:
       - 5601:5601
+    restart: on-failure
 
 
 volumes: {"data01": {"driver": "local"}, "data02": {"driver": "local"}, "data03": {"driver": "local"}}
@@ -721,7 +729,6 @@ EOF
   # restart kibana
   echo "${green}[DEBUG]${reset} Restarting kibana to pick up the new elastic password"
   docker restart kibana
-  sleep 10
 
   # copy the certificate authority into the homedir for the project
   echo "${green}[DEBUG]${reset} Copying the certificate authority into the project folder"
@@ -1108,13 +1115,17 @@ services:
   metricbeat:
     container_name: metricbeat
     user: root
+    command: metricbeat -environment container --strict.perms=false
     image: docker.elastic.co/beats/metricbeat:${VERSION}
     volumes: ['./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml', './temp:/temp', 'certs:\$MB_CERTS_DIR', '/var/run/docker.sock:/var/run/docker.sock:ro']
+    restart: on-failure
   filebeat:
     container_name: filebeat
     user: root
+    command: filebeat -environment container --strict.perms=false
     image: docker.elastic.co/beats/filebeat:${VERSION}
     volumes: ['./filebeat.yml:/usr/share/filebeat/filebeat.yml', './temp:/temp', 'certs:\$FB_CERTS_DIR', '/var/lib/docker/containers:/var/lib/docker/containers:ro', '/var/run/docker.sock:/var/run/docker.sock:ro']
+    restart: on-failure
 
 
 volumes: {"certs"}
@@ -1127,13 +1138,17 @@ services:
   metricbeat:
     container_name: metricbeat
     user: root
+    command: metricbeat -environment container --strict.perms=false
     image: docker.elastic.co/beats/metricbeat:${VERSION}
     volumes: ['./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml', './temp:/tmp', './ca.crt:/usr/share/metricbeat/ca.crt', '/var/run/docker.sock:/var/run/docker.sock:ro']
+    restart: on-failure
   filebeat:
     container_name: filebeat
     user: root
+    command: filebeat -environment container --strict.perms=false
     image: docker.elastic.co/beats/filebeat:${VERSION}
     volumes: ['./filebeat.yml:/usr/share/filebeat/filebeat.yml', './temp:/temp', './ca.crt:/usr/share/filebeat/ca.crt', '/var/lib/docker/containers:/var/lib/docker/containers:ro', '/var/run/docker.sock:/var/run/docker.sock:ro']
+    restart: on-failure
 
 volumes: {"certs"}
 EOF
@@ -1152,8 +1167,6 @@ EOF
 
   # start service
   checkhealth
-  echo "${green}[DEBUG]${reset} Sleeping for 30 seconds for things to settle before starting beats"
-  sleep 30
   echo "${green}[DEBUG]${reset} Starting beats"
   docker-compose -f monitoring-compose.yml up -d >/dev/null 2>&1
 
@@ -1184,6 +1197,9 @@ minio() {
   # pull image
   pullminio
 
+  # create data directory
+  mkdir data
+
   # create minio-compose.yml
   cat > minio-compose.yml<<EOF
 version: '2.2'
@@ -1192,6 +1208,7 @@ services:
   minio01:
     container_name: minio01
     image: minio/minio
+    user: \${UG}
     environment:
       - MINIO_ROOT_USER=minio
       - MINIO_ROOT_PASSWORD=minio123
@@ -1199,6 +1216,7 @@ services:
     command: server /data
     ports:
       - 9000:9000
+    restart: on-failure
     healthcheck:
       test: curl http://localhost:9000/minio/health/live
       interval: 30s
@@ -1218,7 +1236,7 @@ services:
 EOF
 
   echo "${green}[DEBUG]${reset} Starting minio"
-  docker-compose -f minio-compose.yml up -d >/dev/null 2>&1
+  UG=$(id -u):$(id -g) docker-compose -f minio-compose.yml up -d >/dev/null 2>&1
   checkhealth
 
 
