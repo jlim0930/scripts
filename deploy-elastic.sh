@@ -17,6 +17,9 @@
 
 #################################################################################################################################
 
+# configurable vars
+HEAP="512m"
+
 # set basedir
 BASEDIR=$(pwd)
 
@@ -396,7 +399,7 @@ services:
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
       - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -433,7 +436,7 @@ services:
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
       - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -463,7 +466,7 @@ services:
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
       - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -551,7 +554,7 @@ services:
       - discovery.zen.minimum_master_nodes=2
       - discovery.zen.ping.unicast.hosts=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -580,7 +583,7 @@ services:
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
       - discovery.zen.ping.unicast.hosts=es01,es02,es03
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
@@ -602,7 +605,7 @@ services:
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
       - discovery.zen.ping.unicast.hosts=es01,es02,es03
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
