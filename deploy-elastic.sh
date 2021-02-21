@@ -734,7 +734,7 @@ EOF
 
 }
 
- monitor() {
+monitor() {
   VERSION=${1}
   version ${VERSION}
 
