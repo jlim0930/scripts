@@ -9,7 +9,7 @@
 # $ curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o deploy-elastic.sh
 # $ sh ./deploy-elastic.sh stack {VERSION}
 # $ sh ./deploy-elastac.sh monitor {VERSION}
-# $ sh ./deploy-elastic.sh minio {VERSION}
+# $ sh ./deploy-elastic.sh snapshot {VERSION}
 # $ sh ./deploy-elastic.sh full {VERSION}
 #
 # es01 is exposed on 9200
@@ -36,9 +36,9 @@ help() {
   echo -e "\t\tExample: ./`basename $0` stack 7.10.2"
   echo -e "\t${blue}monitor${reset} - Adds metricbeat collections monitoring.  Must have a deployment running first. Specify the verion of the running instance. Only for version 6.5+"
   echo -e "\t\tExample: ./`basename $0` monitor 7.10.2"
-  echo -e "\t${blue}minio${reset} - Adds minio container and configures minio01 snapshot repository onto the deployment.  Must have a deployment running first."
-  echo -e "\t\tExample: ./`basename $0` minio 7.10.2"
-  echo -e "\t${blue}full${reset} - Runs the full stack with monitoring and minio."
+  echo -e "\t${blue}snapshot${reset} - Adds minio container and configures minio01 snapshot repository onto the deployment.  Must have a deployment running first."
+  echo -e "\t\tExample: ./`basename $0` snapshot 7.10.2"
+  echo -e "\t${blue}full${reset} - Runs the full stack with monitoring and snapshot."
   echo -e "\t\tExample: ./`basename $0` full 7.10.2"
   exit
 }
@@ -152,8 +152,8 @@ if [ -f monitoring-compose.yml ]; then
   LIST="\${LIST} metricbeat filebeat"
 fi
 
-if [ -f minio-compose.yml ]; then
-  STRING="\${STRING} -f minio-compose.yml"
+if [ -f snapshot-compose.yml ]; then
+  STRING="\${STRING} -f snapshot-compose.yml"
   LIST="\${LIST} minio01 es_mc_1"
 fi
 
@@ -1172,7 +1172,7 @@ EOF
 
 }
 
-minio() {
+snapshot() {
   VERSION=${1}
   version ${VERSION}
   echo "${green}==== Deploying minio instance and adding snapshot repository as minio01 ====${reset}"
@@ -1200,8 +1200,8 @@ minio() {
   # create data directory
   mkdir data
 
-  # create minio-compose.yml
-  cat > minio-compose.yml<<EOF
+  # create snapshot-compose.yml
+  cat > snapshot-compose.yml<<EOF
 version: '2.2'
 
 services:
@@ -1236,7 +1236,7 @@ services:
 EOF
 
   echo "${green}[DEBUG]${reset} Starting minio"
-  UG=$(id -u):$(id -g) docker-compose -f minio-compose.yml up -d >/dev/null 2>&1
+  UG=$(id -u):$(id -g) docker-compose -f snapshot-compose.yml up -d >/dev/null 2>&1
   checkhealth
 
 
@@ -1319,15 +1319,15 @@ case $1 in
   monitor)
     monitor ${2}
     ;;
-  minio)
-    minio ${2}
+  snapshot
+    snapshot ${2}
     ;;
   full)
     stack ${2}
     checkhealth
     monitor ${2}
     checkhealth
-    minio ${2}
+    snapshot ${2}
     ;;
   *)
     help
