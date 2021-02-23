@@ -80,6 +80,7 @@ EOF
  }
 
 gitpull () {
+  build
   cd ${HOME}/wiki
   git reset --hard
   git pull --rebase
