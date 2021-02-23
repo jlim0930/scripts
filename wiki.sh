@@ -3,6 +3,7 @@
 # This script will use linuxserver.io dokuwiki container and manage your content on github repo
 
 # Please create a github repo named wiki and set it to private
+# https://docs.github.com/en/github/getting-started-with-github/create-a-repo
 # setup ssh keys for github so that this script can use it to get/push content
 # https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh
 
