@@ -4,6 +4,7 @@
 
 # Please create a github repo named wiki and set it to private
 # setup ssh keys for github so that this script can use it to get/push content
+# https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh
 
 
 # This script will create ${HOME}/wiki to store your content
