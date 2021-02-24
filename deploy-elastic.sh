@@ -1319,7 +1319,7 @@ case $1 in
   monitor)
     monitor ${2}
     ;;
-  snapshot
+  snapshot)
     snapshot ${2}
     ;;
   full)
