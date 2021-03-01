@@ -203,10 +203,10 @@ cleanup() {
   # check to see if the directory exists should not since this is the start
   STRING="-f stack-compose.yml"
   LIST="es01 es02 es03 kibana es_wait_until_ready_1"
-  
+
   if [ -z ${WORKDIR} ]; then
     cd ${WORKDIR}
-    
+
     if [ -f monitor-compose.yml ]; then
       STRING="${STRING} -f monitor-compose.yml"
       LIST="${LIST} metricbeat filebeat"
@@ -229,7 +229,7 @@ cleanup() {
 
     docker-compose ${STRING} down >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Performed docker-compose down"
-    
+
   fi
 
   docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
@@ -361,7 +361,7 @@ instances:
 EOF
 
   echo "${green}[DEBUG]${reset} Created instances.yml"
-  
+
   # start creating create-certs.yml
   createcertscurrent="version: '2.2'
 
@@ -374,7 +374,7 @@ services:
         yum install -y -q -e 0 unzip;
         if [[ ! -f /certs/bundle.zip ]]; then
           bin/elasticsearch-certutil cert --silent --pem --in config/certificates/instances.yml -out /certs/bundle.zip;
-          unzip /certs/bundle.zip -d /certs; 
+          unzip /certs/bundle.zip -d /certs;
         fi;
         chown -R 1000:0 /certs
       '
@@ -421,7 +421,7 @@ services:
         fi;
         if [[ ! -f /local/certs/bundle.zip ]]; then
           bin/elasticsearch-certgen --silent --in config/certificates/instances.yml --out config/certificates/certs/bundle.zip;
-          unzip config/certificates/certs/bundle.zip -d config/certificates/certs; 
+          unzip config/certificates/certs/bundle.zip -d config/certificates/certs;
         fi;
         chgrp -R 0 config/certificates/certs
       '
@@ -450,14 +450,14 @@ services:
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
-      - xpack.license.self_generated.type=trial 
+      - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=\$CERTS_DIR/es01/es01.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es01/es01.key
@@ -489,7 +489,7 @@ services:
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es02/es02.key
@@ -514,7 +514,7 @@ services:
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es03/es03.key
@@ -547,7 +547,7 @@ services:
     command: /usr/bin/true
     depends_on: {\"es01\": {\"condition\": \"service_healthy\"}}
 
-volumes: {\"data01\", \"data02\", \"data03\", \"certs\"}  
+volumes: {\"data01\", \"data02\", \"data03\", \"certs\"}
   "
 
   stackcompose71="version: '2.2'
@@ -562,14 +562,14 @@ services:
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
-      - xpack.license.self_generated.type=trial 
+      - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=\$CERTS_DIR/es01/es01.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es01/es01.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es01/es01.key
@@ -601,7 +601,7 @@ services:
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es02/es02.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es02/es02.key
@@ -626,7 +626,7 @@ services:
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.security.transport.ssl.enabled=true
-      - xpack.security.transport.ssl.verification_mode=certificate 
+      - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.security.transport.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.transport.ssl.certificate=\$CERTS_DIR/es03/es03.crt
       - xpack.security.transport.ssl.key=\$CERTS_DIR/es03/es03.key
@@ -661,7 +661,7 @@ services:
 
 volumes: {\"data01\", \"data02\", \"data03\", \"certs\"}
   "
-  
+
   stackcompose6="version: '2.2'
 
 services:
@@ -867,7 +867,7 @@ EOF
   echo "${green}[DEBUG]${reset} Complete! - stack deployed. ${VERSION} "
   echo ""
 
-# End of stack function  
+# End of stack function
 }
 
 ###############################################################################################################
@@ -884,14 +884,14 @@ monitor() {
   else
     echo "${green}********** Deploying metricbeat collections monitoring **********${reset}"
   fi
-  
+
   # check to see if ${WORKDIR} exits
   if [ ! -d ${WORKDIR} ]; then
     echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
     stack ${VERSION}
-  else  
+  else
     cd ${WORKDIR}
-  fi 
+  fi
 
   # check to see if monitor-compose.yml already exists.
   if [ -f "monitor-compose.yml" ]; then
@@ -905,12 +905,12 @@ monitor() {
     echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested monitoring for ${VERSION}"
     return
   fi
-    
+
     # grab the elastic password
     grabpasswd
-    
+
     checkhealth
-  
+
   # add MB_CERTS_DIR & FB_CERTS to .env
   cat >> .env<<EOF
 MB_CERTS_DIR=/usr/share/metricbeat/certificates
@@ -1177,7 +1177,7 @@ services:
 volumes: {"certs"}
 EOF
 
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then 
+  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
     true
   else
     if [ "`uname -s`" != "Darwin" ]; then
@@ -1193,7 +1193,7 @@ EOF
 
   # add setting for xpack.monitoring.collection.enabled
   checkhealth
- 
+
   echo "${green}[DEBUG]${reset} Setting xpack.monitoring.collection.enabled: true"
   curl -k -u elastic:${PASSWD} -X PUT "https://localhost:9200/_cluster/settings?pretty" -H 'Content-Type: application/json' -d'
 {
@@ -1218,7 +1218,7 @@ EOF
   echo "${green}[DEBUG]${reset} Starting monitoring....."
   docker-compose -f monitor-compose.yml up -d >/dev/null 2>&1
 
-# End of monitor function  
+# End of monitor function
 }
 
 ###############################################################################################################
@@ -1233,10 +1233,10 @@ snapshot() {
     echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
     stack ${VERSION}
     echo "${green}********** Deploying minio and snapshots **********${reset}"
-  else  
+  else
     cd ${WORKDIR}
     echo "${green}********** Deploying minio and snapshots **********${reset}"
-  fi 
+  fi
 
   # check to see if snapshot-compose.yml already exists.
   if [ -f "snapshot-compose.yml" ]; then
@@ -1250,10 +1250,10 @@ snapshot() {
     echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
     return
   fi
-    
+
   # grab the elastic password
   grabpasswd
-    
+
   # check health before continuing
   checkhealth
 
@@ -1301,7 +1301,7 @@ services:
       /usr/bin/mc policy set public s3/elastic;
       '
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Starting minio"
   docker-compose -f snapshot-compose.yml up -d >/dev/null 2>&1
   if [ $? -ne 0 ]; then
@@ -1399,10 +1399,10 @@ apm() {
     echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
     stack ${VERSION}
     echo "${green}********** Deploying apm-server **********${reset}"
-  else  
+  else
     cd ${WORKDIR}
     echo "${green}********** Deploying apm-server **********${reset}"
-  fi 
+  fi
 
   # check to see if apm-compose.yml already exists.
   if [ -f "apm-compose.yml" ]; then
@@ -1416,10 +1416,10 @@ apm() {
     echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
     return
   fi
-    
+
   # grab the elastic password
   grabpasswd
-    
+
   # check health before continuing
   checkhealth
 
@@ -1508,7 +1508,7 @@ services:
   else
     echo "${apm6}" > apm-compose.yml
   fi
-  
+
   # starting APM
   docker-compose -f apm-compose.yml up -d >/dev/null 2>&1
   if [ $? -ne 0 ]; then
@@ -1550,10 +1550,10 @@ entsearch() {
     echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
     stack ${VERSION}
     echo "${green}********** Deploying Enterprise Search **********${reset}"
-  else  
+  else
     cd ${WORKDIR}
     echo "${green}********** Deploying Enterprise Search **********${reset}"
-  fi 
+  fi
 
   # check to see if apm-compose.yml already exists.
   if [ -f "entsearch-compose.yml" ]; then
@@ -1567,10 +1567,10 @@ entsearch() {
     echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
     return
   fi
-    
+
   # grab the elastic password
   grabpasswd
-    
+
   # check health before continuing
   checkhealth
 
@@ -1648,7 +1648,7 @@ volumes: {"certs"}
 EOF
 
   echo "${green}[DEBUG]${reset} Created entsearch-compose.yml"
-  
+
   docker-compose -f entsearch-compose.yml up -d >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a while to finish install. Please run docker logs -f entsearch to view progress"
   echo "${green}[DEBUG]${reset} For now please browse to http://IP:3002 and use enterprise_search and ${PASSWD} to login"
@@ -1664,19 +1664,15 @@ case ${1} in
     stack ${2}
     ;;
   monitor)
-    stack ${2}
     monitor ${2}
     ;;
   snapshot)
-    stack ${2}
     snapshot ${2}
     ;;
   apm)
-    stack ${2}
     apm ${2}
     ;;
   entsearch)
-    stack ${2}
     entsearch ${2}
     ;;
   full)
