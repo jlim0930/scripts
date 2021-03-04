@@ -446,6 +446,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es01
+      - node.attr.data=hot
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -478,6 +479,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es02
+      - node.attr.data=hot
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -503,6 +505,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es03
+      - node.attr.data=hot
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -558,6 +561,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es01
+      - node.attr.data=hot
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -590,6 +594,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es02
+      - node.attr.data=hot
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -615,6 +620,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es03
+      - node.attr.data=warm
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -670,6 +676,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es01
+      - node.attr.data=hot
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - discovery.zen.ping.unicast.hosts=es01,es02,es03
@@ -700,6 +707,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es02
+      - node.attr.data=hot
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
@@ -723,6 +731,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es03
+      - node.attr.data=warm
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
