@@ -505,7 +505,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     environment:
       - node.name=es03
-      - node.attr.data=hot
+      - node.attr.data=warm
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
