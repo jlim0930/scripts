@@ -447,6 +447,9 @@ services:
     environment:
       - node.name=es01
       - node.attr.data=hot
+      - node.attr.data2=hot
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone1
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -480,6 +483,9 @@ services:
     environment:
       - node.name=es02
       - node.attr.data=hot
+      - node.attr.data2=warm
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone2
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -506,6 +512,9 @@ services:
     environment:
       - node.name=es03
       - node.attr.data=warm
+      - node.attr.data2=cold
+      - node.attr.zone=zone2
+      - node.attr.zone2=zone3
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -562,6 +571,9 @@ services:
     environment:
       - node.name=es01
       - node.attr.data=hot
+      - node.attr.data2=hot
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone1
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -595,6 +607,9 @@ services:
     environment:
       - node.name=es02
       - node.attr.data=hot
+      - node.attr.data2=warm
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone2
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -621,6 +636,9 @@ services:
     environment:
       - node.name=es03
       - node.attr.data=warm
+      - node.attr.data2=cold
+      - node.attr.zone=zone2
+      - node.attr.zone=zone3
       - discovery.seed_hosts=es01,es02,es03
       - cluster.initial_master_nodes=es01,es02,es03
       - ELASTIC_PASSWORD=${PASSWD}
@@ -677,6 +695,9 @@ services:
     environment:
       - node.name=es01
       - node.attr.data=hot
+      - node.attr.data2=hot
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone1
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - discovery.zen.ping.unicast.hosts=es01,es02,es03
@@ -708,6 +729,9 @@ services:
     environment:
       - node.name=es02
       - node.attr.data=hot
+      - node.attr.data2=warm
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone2
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
@@ -732,6 +756,9 @@ services:
     environment:
       - node.name=es03
       - node.attr.data=warm
+      - node.attr.data2=cold
+      - node.attr.zone=zone2
+      - node.attr.zone2=zone3
       - cluster.name=docker-cluster
       - discovery.zen.minimum_master_nodes=2
       - ELASTIC_PASSWORD=${PASSWD}
