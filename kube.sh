@@ -146,7 +146,9 @@ function checkdocker() {
 
 # function start
 function build() {
+  echo "${green}[DEBUG]${reset} CPU will be set to ${CPU} cores"
   minikube config set cpus ${CPU}
+  echo "${green}[DEBUG]${reset} MEM will be set to ${MEM}mb"
   minikube config set memory ${MEM}
 #  minikube config set disk-size ${HDD}
   if [ ${OS} == "linux" ]; then
