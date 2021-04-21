@@ -16,9 +16,9 @@
 #################
 
 ## User configurable variables
-CPU=8         # Please change this to the # of cores you want minikube to use. default is 8 cores
-MEM=12288     # Please change this  to the amount of memory to give to minikube. default is 12GB
-HDD=20000     # Please change this to the amount of hdd space to give for minikube. default is 20,000MB
+CPU=""         # Please change this to the # of cores you want minikube to use. If not set it will use half of your total core count
+MEM=""         # Please change this  to the amount of memory to give to minikube. If not set it will use half of your memory up to 16GB max
+# HDD=""        # Please change this to the amount of hdd space to give for minikube. default is 20,000MB
 
 ## vars
 
@@ -27,6 +27,53 @@ red=`tput setaf 1`
 green=`tput setaf 2`
 blue=`tput setaf 4`
 reset=`tput sgr0`
+
+# Get OS & set CPU & MEM
+OS=`uname -s`
+case ${OS} in
+  "Linux")
+    OS="linux"
+    if [ -z ${CPU} ]; then
+      temp=`nproc`
+      CPU=`echo "${temp}/2" | bc`
+    fi
+    if [ -z ${MEM} ]; then
+      temp=`free -m | awk '/Mem\:/ { print $2 }'`
+      value=`echo "${temp}/2" | bc`
+      if [ ${value} -gt "16384" ]; then
+        MEM="16384"
+      else
+        MEM="${value}"
+      fi
+    fi
+    ;;
+  "Darwin")
+    if [ `uname -m` == "x86_64" ]; then
+      OS="macos-x86_64"
+    elif [ `uname -m` == "arm64" ]; then
+      OS="macos-arm64"
+    fi
+    if [ -z ${CPU} ]; then
+      temp=`sysctl -n hw.ncpu`
+      CPU=`echo "${temp}/2" | bc`
+    fi
+    if [ -z ${MEM} ]; then
+      temp=`sysctl -n hw.memsize`
+      value=`echo "${temp}/2097152" | bc`
+      if [ ${value} -gt "16384" ]; then
+        MEM="16384"
+      else
+        MEM="${value}"
+      fi
+    fi
+    ;;
+  *)
+    echo "${red}[DEBUG]${reset} This script only supports macOS and linux"
+    exit
+    ;;
+esac
+
+## functions
 
 # function help
 function help() {
@@ -101,7 +148,7 @@ function checkdocker() {
 function build() {
   minikube config set cpus ${CPU}
   minikube config set memory ${MEM}
-  minikube config set disk-size ${HDD}
+#  minikube config set disk-size ${HDD}
   if [ ${OS} == "linux" ]; then
     minikube start --driver=docker
   else
@@ -132,25 +179,7 @@ EOF
   echo "${green}[DEBUG]${reset} LoadBalancer Pool: ${startip} - ${endip}"
 }
 
-
-# Get OS
-OS=`uname -s`
-case ${OS} in
-  "Linux")
-    OS="linux"
-    ;;
-  "Darwin")
-    if [ `uname -m` == "x86_64" ]; then
-      OS="macos-x86_64"
-    elif [ `uname -m` == "arm64" ]; then
-      OS="macos-arm64"
-    fi
-    ;;
-  *)
-    echo "${red}[DEBUG]${reset} This script only supports macOS and linux"
-    exit
-    ;;
-esac
+## script
 
 case ${1} in
   build|start)
