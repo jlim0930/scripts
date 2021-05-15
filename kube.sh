@@ -195,7 +195,7 @@ case ${1} in
     echo "${green}[DEBUG]${reset} Stopping minikube"
     minikube stop
     ;;
-  delete)
+  delete|cleanup)
     echo "${green}[DEBUG]${reset} Deleting minikube"
     minikube delete
     rm -rf ${HOME}/.minikube >/dev/null 2>&1
