@@ -88,7 +88,7 @@ function checkminikube() {
     if [ $OS == "linux" ]; then
       echo "${green}[DEBUG]${reset} Linux found."
       curl -LO -s https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-      sudo install minikube-linux-amd /usr/local/bin/minikube
+      sudo install minikube-linux-amd64 /usr/local/bin/minikube
       rm -rf minikube-linux-amd64 >/dev/null 2>&1
     elif [ ${OS} == "macos-x86_64" ]; then
       echo "${gree}[DEBUG]${reset} macOS x86_64 found."
