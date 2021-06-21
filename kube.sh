@@ -88,7 +88,7 @@ function checkminikube() {
     if [ $OS == "linux" ]; then
       echo "${green}[DEBUG]${reset} Linux found."
       curl -LO -s https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-      sudo install minikube-linux-amd64 /usr/local/bin/minikube
+      sudo install minikube-linux-amd /usr/local/bin/minikube
       rm -rf minikube-linux-amd64 >/dev/null 2>&1
     elif [ ${OS} == "macos-x86_64" ]; then
       echo "${gree}[DEBUG]${reset} macOS x86_64 found."
@@ -154,7 +154,7 @@ function build() {
   if [ ${OS} == "linux" ]; then
     minikube start --driver=docker
   else
-    minikube start --driver=hyperkit
+    minikube start --driver=hyperkit --hyperkit-vpnkit-sock=auto
   fi
   minikube addons enable metallb
   baseip=`minikube ip | cut -d"." -f1-3`
