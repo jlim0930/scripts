@@ -19,6 +19,7 @@
 CPU=""         # Please change this to the # of cores you want minikube to use. If not set it will use half of your total core count
 MEM=""         # Please change this  to the amount of memory to give to minikube. If not set it will use half of your memory up to 16GB max
 # HDD=""        # Please change this to the amount of hdd space to give for minikube. default is 20,000MB
+SHELL=`env | grep SHELL | awk -F"/" '{ print $NF }'`
 
 ## vars
 
@@ -179,6 +180,7 @@ EOF
   rm -rf /tmp/metallb-config.yaml >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} minikube IP is: `minikube ip`"
   echo "${green}[DEBUG]${reset} LoadBalancer Pool: ${startip} - ${endip}"
+  source <(/usr/local/bin/kubectl completion ${SHELL})
 }
 
 ## script
