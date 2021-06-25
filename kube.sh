@@ -132,6 +132,18 @@ function checkkubectl() {
   fi
 }
 
+# function delete the local minikube and kubectl in /usr/local/bin
+function deletemk() {
+  if [ -x "$(command -v kubectl)" ]; then
+    rm -rf $(command -v kubectl)
+    echo "${green}[DEBUG]${reset} Deleted kubectl"
+  fi
+  if [ -x "$(command -v minikube)" ]; then
+    rm -rf $(command -v minikube)
+    echo "${green}[DEBUG]${reset} Deleted minikube"
+  fi
+}
+
 # function check docker
 function checkdocker() {
   if [ ${OS} == "macos-x86_64" ] || [ ${OS} == "macos-arm64" ]; then
@@ -196,6 +208,12 @@ case ${1} in
   stop)
     echo "${green}[DEBUG]${reset} Stopping minikube"
     minikube stop
+    ;;
+  upgrade)
+    deletemk
+    checkminikube
+    checkkubectl
+    echo "${green}[DEBUG]${reset} minikube and kubectl upgraded"
     ;;
   delete|cleanup)
     echo "${green}[DEBUG]${reset} Deleting minikube"
