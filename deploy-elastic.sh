@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
+# version 5.0 - added fleet
 # version 4.0 - added apm-server & enterprise search(still needs some work on es but its functional)
 # version 3.0 - added minio & snapshots
 # version 2.0 - added monitoring option
@@ -52,6 +53,10 @@ help() {
   echo -e "\t${blue}all${reset} - Starts deployment with everything!"
   echo -e "\t\tExample: ./`basename $0` all 7.10.2"
   echo -e ""
+	echo -e "\t${blue}fleet${reset} - Starts deployment with fleet server"
+	echo -e "\t\tExample: ./`basename $0` fleet 7.14.1"
+	echo -e ""
+	echo -e "\t${blue}cleanup${reset} - cleansup all the containers and directories"
   exit
 }
 
@@ -227,17 +232,23 @@ cleanup() {
       LIST="${LIST} entsearch"
     fi
 
+    if [ -f fleet.yml ]; then
+      STRING="${STRING} -f fleet.yml"
+      LIST="${LIST} fleet"
+    fi
+
     docker-compose ${STRING} down >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Performed docker-compose down"
 
   fi
 
-  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
-  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
+  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
+  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
   docker network rm es_default >/dev/null 2>&1
   docker volume rm es_data01 >/dev/null 2>&1
   docker volume rm es_data02 >/dev/null 2>&1
   docker volume rm es_data03 >/dev/null 2>&1
+  docker volume rm es_fleet >/dev/null 2>&1
   docker volume rm es_certs >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Removed volumes and networks"
 
@@ -355,6 +366,13 @@ instances:
   - name: minio
     dns:
       - minio01
+      - localhost
+    ip:
+      - 127.0.0.1
+
+  - name: fleet
+    dns:
+      - fleet
       - localhost
     ip:
       - 127.0.0.1
@@ -1591,7 +1609,7 @@ entsearch() {
     echo "${green}********** Deploying Enterprise Search **********${reset}"
   fi
 
-  # check to see if apm-compose.yml already exists.
+  # check to see if entsearch-compose.yml already exists.
   if [ -f "entsearch-compose.yml" ]; then
     echo "${red}[DEBUG]${reset} entsearch-compose.yml already exists. Exiting."
     return
@@ -1628,7 +1646,7 @@ EOF
 
   # add to kibana.yml
   if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "10" ]; then
-    cat >> kibana.yml<<EOF
+  cat >> kibana.yml<<EOF
 enterpriseSearch.host: "http://localhost:3002"
 EOF
   fi
@@ -1693,6 +1711,114 @@ EOF
   # End of Enterprise Search
 }
 
+fleet() {
+  # adding monitoring
+  VERSION=${1}
+  version ${VERSION}
+
+  # check to make sure that ES is 7.7 or greater
+  if [ ${MAJOR} = "7" ]  && [ ${MINOR} -le "13" ]; then
+    echo "${red}[DEBUG]${reset} FLEET started with 7.14+."
+    return
+  fi
+
+  # check to see if ${WORKDIR} exits
+  if [ ! -d ${WORKDIR} ]; then
+    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
+    stack ${VERSION}
+    echo "${green}********** Deploying FLEET **********${reset}"
+  else
+    cd ${WORKDIR}
+    echo "${green}********** Deploying FLEET **********${reset}"
+  fi
+
+  # check to see if fleet-compose.yml already exists.
+  if [ -f "fleet-compose.yml" ]; then
+    echo "${red}[DEBUG]${reset} fleet-compose.yml already exists. Exiting."
+    return
+  fi
+
+  # check to see if version match
+  OLDVERSION="`cat VERSION`"
+  if [ "${OLDVERSION}" != "${VERSION}" ]; then
+    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
+    return
+  fi
+
+  # grab the elastic password
+  grabpasswd
+
+  # check health before continuing
+  checkhealth
+
+  # pull image
+  pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
+
+  # generate kibana encryption key
+  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
+
+  # add to .env
+  cat >> .env<<EOF
+FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
+EOF
+  # add to elasticsearch.yml
+  cat >> elasticsearch.yml<<EOF
+xpack.security.authc.api_key.enabled: true
+EOF
+
+  # restart elasticsearch
+  for instance in es01 es02 es03
+  do
+    docker restart ${instance}>/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Restarting ${instance} for FLEET"
+  done
+
+  checkhealth
+
+  # generate fleet-compose.yml
+  cat > fleet-compose.yml<<EOF
+version: '2.2'
+
+services:
+  fleet:
+    container_name: fleet
+    user: root
+    image: docker.elastic.co/beats/elastic-agent:${VERSION}
+    environment:
+      - FLEET_SERVER_ENABLE=true
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
+      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_ELASTICSEARCH_USERNAME=elastic
+      - FLEET_SERVER_ELASTICSEARCH_PASSWORD=${PASSWD}
+      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certificates/fleet/fleet.crt
+      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certificates/fleet/fleet.key
+      - FLEET_ENROLL=1
+      - FLEET_URL=https://fleet:8220
+      - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - KIBANA_HOST=https://kibana:5601
+      - KIBANA_USERNAME=elastic
+      - KIBANA_PASSWORD=${PASSWD}
+      - KIBANA_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - ELASTICSEARCH_HOST=https://es01:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${PASSWD}
+      - ELATICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - KIBANA_FLEET_SETUP=1
+    ports:
+      - 8220:8220
+    restart: on-failure
+    volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp']
+
+volumes: {"certs"}
+EOF
+
+  echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+
+  docker-compose -f fleet-compose.yml up -d >/dev/null 2>&1
+  echo "${green}[DEBUG]${reset} Started FLEET SERVER. - Please give it about a minute for things to settle before you go into the FLEET app."
+
+  # End of FLEET
+}
 ###############################################################################################################
 
 case ${1} in
@@ -1710,6 +1836,9 @@ case ${1} in
     ;;
   entsearch)
     entsearch ${2}
+    ;;
+  fleet)
+    fleet ${2}
     ;;
   full)
     stack ${2}
@@ -1734,6 +1863,7 @@ case ${1} in
     snapshot ${2}
     apm ${2}
     entsearch ${2}
+    fleet ${2}
     ;;
   cleanup)
     cleanup
