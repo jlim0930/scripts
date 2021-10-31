@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
+# version 6.1 - added additional functions and cleaned up
 # version 5.0 - added fleet
 # version 4.0 - added apm-server & enterprise search(still needs some work on es but its functional)
 # version 3.0 - added minio & snapshots
@@ -12,6 +13,7 @@
 # es01 is exposed on 9200 with SSL
 # kibana is exposed on 5601 with SSL
 # enterprise-search is exposed on 3002 without SSL
+# fleet is exposed on 8220
 
 ###############################################################################################################
 
@@ -31,39 +33,45 @@ reset=`tput sgr0`
 ###############################################################################################################
 
 help() {
-  echo -e "${green}Usage:${reset} ./`basename $0` command version"
-  echo -e "\tThis script currently works on all 7.x and 6.x versions of elasticsearch"
-  echo -e "\t${blue}COMMAND${reset}"
-  echo -e "\t${blue}build${reset} - Starts deployment.  Must give the option of full version to deploy"
-  echo -e "\t\tExample: ./`basename $0` build 7.10.2"
-  echo -e "\t${blue}monitor${reset} - If deployment is already running it will add apm-server else it will deploy the stack first then enable metricbeat & filebeat. Only for version 6.5+"
-  echo -e "\t\tExample: ./`basename $0` monitor 7.10.2"
-  echo -e "\t${blue}snapshot${reset} - If deployment is already running it will add apm-server else it will deploy the stack first then enable minio server and snapshot repository.  For 7.4+ it will also setup SLM."
-  echo -e "\t\tExample: ./`basename $0` snapshot 7.10.2"
-  echo -e "\t${blue}full${reset} - Starts deployment with metricbeat & filebeat monitoring and minio with snapshots"
-  echo -e "\t\tExample: ./`basename $0` full 7.10.2"
-  echo -e "\t${blue}apm${reset} - If deployment is already running it will add apm-server else it will deploy the stack first then add apm-server"
-  echo -e "\t\tExample: ./`basename $0` apm 7.10.2"
-  echo -e "\t${blue}fullapm${reset} - Starts deployment with metricbeat & filebeat monitoring, snapshots, & apm-server"
-  echo -e "\t\tExample: ./`basename $0` fullapm 7.10.2"
-  echo -e "\t${blue}entsearch${reset} - If deployment is already running it will add apm-server else it will deploy the stack first then add Enterprise Search. Enterprise Search is only available on 7.7+"
-  echo -e "\t\tExample: ./`basename $0` entsearch 7.10.2"
-  echo -e "\t${blue}fullentsearch${reset} - Starts deployment with metricbeat & filebeat monitoring, snapshots, & Enterprise Search"
-  echo -e "\t\tExample: ./`basename $0` fullentsearch 7.10.2"
-  echo -e "\t${blue}all${reset} - Starts deployment with everything!"
-  echo -e "\t\tExample: ./`basename $0` all 7.10.2"
-  echo -e ""
-	echo -e "\t${blue}fleet${reset} - Starts deployment with fleet server"
-	echo -e "\t\tExample: ./`basename $0` fleet 7.14.1"
-	echo -e ""
-	echo -e "\t${blue}cleanup${reset} - cleansup all the containers and directories"
-  exit
+  echo "This script currently works on all 7.x and 6.x versions of elasticsearch"
+  echo ""
+  echo "${green}Usage:${reset} ./`basename $0` command version"
+  echo "${blue}COMMANDS${reset}"
+  echo "  build|start|stack VERSION - Starts a basic deployment of ES & Kibana.  Must give the full version"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` build 7.15.0"
+  echo "  ${blue}monitor${reset} - Starts the stack with  metricbeat & filebeat monitoring. ${red}Only for version 6.5+${reset}"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` monitor 7.10.2"
+  echo "  ${blue}snapshot${reset} - Starts the stack with minio and configure for snapshots.  For 7.4+ it will also setup SLM."
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` snapshot 7.10.2"
+  echo "  ${blue}full${reset} - Starts the stack with monitoring & snapshots"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` full 7.10.2"
+  echo ""
+  echo "  ${blue}apm${reset} - Starts the stack with apm-server"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` apm 7.10.2"
+  echo "  ${blue}fullapm${reset} - Starts the stack with monitoring, snapshots, & apm-server.  ${red}Only for version 6.5+${reset}"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullapm 7.10.2"
+  echo ""
+  echo "  ${blue}entsearch${reset} - Starts the stack with enterprise search. ${red}Enterprise Search is only available on 7.7+${reset}"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` entsearch 7.10.2"
+  echo "  ${blue}fullentsearch${reset} - Starts the stack wtih monitoring, snapshots, & Enterprise Search"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullentsearch 7.10.2"
+  echo ""
+	echo "  ${blue}fleet${reset} - Starts deployment with fleet server ${red}Fleet Server is only available on 7.10+${reset}"
+	echo "    ${green}EXAMPLE:${reset} ./`basename $0` fleet 7.14.1"
+  echo "  ${blue}fullfleet${reset} - Starts the stack wtih monitoring, snapshots, & fleet server"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullfleet 7.14.1"
+	echo ""
+  echo "  ${blue}all${reset} - Starts deployment with everything! ${red}Enterprise Search is only available on 7.7+${reset}"
+  echo "    ${green}EXAMPLE:${reset} ./`basename $0` all 7.10.2"
+  echo ""
+	echo "  ${blue}cleanup${reset} - cleans up all the containers and directories"
 }
+
 
 ###############################################################################################################
 
+# check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
 version() {
-  # check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
   if [ -z ${1} ]; then
     help
   else
@@ -78,10 +86,13 @@ version() {
   fi
 }
 
-###############################################################################################################
+# function used for version checking
+checkversion() {
+  echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'
+}
 
+# check vm.max_map_count on linux and ask user to set it if not set properly
 checkmaxmapcount() {
-  # check vm.max_map_count on linux and ask user to set it if not set properly
   if [ "`uname -s`" != "Darwin" ]; then
     COUNT=`sysctl vm.max_map_count | awk {' print $3 '}`
     if [ ${COUNT} -le "262144" ]; then
@@ -93,10 +104,8 @@ checkmaxmapcount() {
   fi
 }
 
-###############################################################################################################
-
+# check to ensure docker is running and you can run docker commands
 checkdocker() {
-  # check to ensure docker is running and you can run docker commands
   docker info >/dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} Docker is not running or you are not part of the docker group"
@@ -111,10 +120,8 @@ checkdocker() {
   fi
 }
 
-###############################################################################################################
-
+# check to see if containers/networks/volumes exists
 checkcontainer() {
-  # check to see if containers/networks/volumes exists
   for name in es01 es02 es03 kibana
   do
     if [ $(docker ps -a --format '{{.Names}}' | grep -c ${name}) -ge 1  ]; then
@@ -138,11 +145,9 @@ checkcontainer() {
   done
 }
 
-###############################################################################################################
-
+# check to make sure that the deployment is in GREEN status
 checkhealth() {
-  # check to make sure that the deployment is in GREEN status
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
     while true
     do
       if [ `docker run --rm -v es_certs:/certs --network=es_default docker.elastic.co/elasticsearch/elasticsearch:${VERSION} curl -s --cacert /certs/ca/ca.crt -u elastic:${PASSWD}   https://es01:9200/_cluster/health | grep -c green` = 1 ]; then
@@ -169,10 +174,8 @@ checkhealth() {
   echo "${green}[DEBUG]${reset} elasticsearch health is ${green}GREEN${reset} moving forward."
 }
 
-###############################################################################################################
-
+# grab the elastic password
 grabpasswd() {
-  # grab the elastic password
   PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
   if [ -z ${PASSWD} ]; then
     echo "${red}[DEBUG]${reset} unable to find elastic users password"
@@ -182,10 +185,8 @@ grabpasswd() {
   fi
 }
 
-###############################################################################################################
-
+# checking for the image and pull it
 pullimage() {
-  # checking for image
   docker image inspect "${1}" > /dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${green}[DEBUG]${reset} Pulling "${1}" image... might take a while"
@@ -199,10 +200,8 @@ pullimage() {
   fi
 }
 
-###############################################################################################################
-
+# cleanup deployment
 cleanup() {
-  # cleanup deployment
   echo "${green}********** Cleaning up "${VERSION}" **********${reset}"
 
   # check to see if the directory exists should not since this is the start
@@ -259,11 +258,8 @@ cleanup() {
 
 ###############################################################################################################
 
+# building the stack
 stack() {
-  # building the stack
-  VERSION=${1}
-  version ${VERSION}
-
   echo "${green}********** Deploying elasticsearch & kibana "${VERSION}" **********${reset}"
 
   # some checks first
@@ -274,6 +270,8 @@ stack() {
   # check to see if the directory exists should not since this is the start
   if [ -d ${WORKDIR} ]; then
     echo "${red}[DEBUG]${reset} Looks like ${WORKDIR} already exists.  Please run cleanup to delete the old deployment"
+    echo ""
+    help
 	exit
   fi
 
@@ -448,7 +446,7 @@ services:
     volumes: ['.:/usr/share/elasticsearch/config/certificates']
   "
 
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
     echo "${createcertscurrent}" > create-certs.yml
   else
     echo "${createcerts6}" > create-certs.yml
@@ -868,6 +866,15 @@ volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
 --url https://localhost:9200" | tee -a notes
   fi
 
+
+  # Add patch stuff here for specific versions and restart es* containers
+  ##
+  # if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
+  #
+  # docker restart es01 es02 es03 
+  # fi
+
+
   # grab the new elastic password
   grabpasswd
 
@@ -875,34 +882,23 @@ volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
   ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
 
   # create kibana.yml
-  if [ ${MAJOR} = "6" ]; then
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
     cat > kibana.yml<<EOF
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
 EOF
-
-  elif [ ${MAJOR} = "7" ]; then
-    if [ ${MINOR} -lt "7" ]; then
-      cat > kibana.yml<<EOF
-elasticsearch.username: "elastic"
-elasticsearch.password: "${PASSWD}"
-xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
-xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
-EOF
-
-    elif [ ${MINOR} -ge "7" ]; then
-      cat > kibana.yml<<EOF
+  else
+    cat > kibana.yml<<EOF
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.encryptedSavedObjects.encryptionKey: "${ENCRYPTION_KEY}"
 EOF
-
-    fi
   fi
+
   echo "${green}[DEBUG]${reset} kibana.yml re-generated with new password and encryption keys"
 
   # restart kibana
@@ -910,7 +906,7 @@ EOF
   echo "${green}[DEBUG]${reset} Restarted kibana to pick up the new elastic password"
 
   # copy the certificate authority into the homedir for the project
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
+   if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
     docker exec es01 /bin/bash -c "cp /usr/share/elasticsearch/config/certificates/ca/ca.* /temp/"
     mv ${WORKDIR}/temp/ca.* ${WORKDIR}/
   else
@@ -927,13 +923,10 @@ EOF
 ###############################################################################################################
 
 monitor() {
-  # adding monitoring
-  VERSION=${1}
-  version ${VERSION}
-
   # check to make sure that ES is 6.6 or greater
-  if [ ${MAJOR} = "6" ]  && [ ${MINOR} -le "4" ]; then
+  if [ $(checkversion $VERSION) -lt $(checkversion "6.5.0") ]; then
     echo "${red}[DEBUG]${reset} metricbeats collections started with 6.5+.  Please use legacy collections method"
+    help
     return
   else
     echo "${green}********** Deploying metricbeat collections monitoring **********${reset}"
@@ -1278,10 +1271,6 @@ EOF
 ###############################################################################################################
 
 snapshot() {
-  # adding monitoring
-  VERSION=${1}
-  version ${VERSION}
-
   # check to see if ${WORKDIR} exits
   if [ ! -d ${WORKDIR} ]; then
     echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
@@ -1557,7 +1546,7 @@ services:
     restart: on-failure
   "
 
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
     echo "${apm7}" > apm-compose.yml
   else
     echo "${apm6}" > apm-compose.yml
@@ -1589,13 +1578,10 @@ services:
 ###############################################################################################################
 
 entsearch() {
-  # adding monitoring
-  VERSION=${1}
-  version ${VERSION}
-
   # check to make sure that ES is 7.7 or greater
-  if [ ${MAJOR} = "7" ]  && [ ${MINOR} -le "7" ]; then
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
     echo "${red}[DEBUG]${reset} Enterprise Search started with 7.7+."
+    help
     return
   fi
 
@@ -1639,15 +1625,19 @@ entsearch() {
 ENTSEARCH_CERTS_DIR=/usr/share/enterprise-search/config/certificates
 EOF
   # add to elasticsearch.yml
-  cat >> elasticsearch.yml<<EOF
+  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
+    cat >> elasticsearch.yml<<EOF
 xpack.security.authc.api_key.enabled: true
+EOF
+  fi
+  cat >> elasticsearch.yml<<EOF
 action.auto_create_index: ".ent-search-*-logs-*,-.ent-search-*,-test-.ent-search-*,+*"
 EOF
 
   # add to kibana.yml
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "10" ]; then
-  cat >> kibana.yml<<EOF
-enterpriseSearch.host: "http://localhost:3002"
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+    cat >> kibana.yml<<EOF
+enterpriseSearch.host: "http://entsearch:3002"
 EOF
   fi
 
@@ -1693,6 +1683,8 @@ services:
     image: docker.elastic.co/enterprise-search/enterprise-search:${VERSION}
     environment:
       - "ENT_SEARCH_DEFAULT_PASSWORD=${PASSWD}"
+      - "allow_es_settings_modification=true"
+      - "elasticsearch.startup_retry.interval=15"
     volumes: ['./enterprise-search.yml:/usr/share/enterprise-search/config/enterprise-search.yml', 'certs:\$ENTSEARCH_CERTS_DIR', './temp:/temp']
     ports:
       - 3002:3002
@@ -1704,21 +1696,20 @@ EOF
   echo "${green}[DEBUG]${reset} Created entsearch-compose.yml"
 
   docker-compose -f entsearch-compose.yml up -d >/dev/null 2>&1
-  echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a while to finish install. Please run docker logs -f entsearch to view progress"
-  echo "${green}[DEBUG]${reset} For now please browse to http://IP:3002 and use enterprise_search and ${PASSWD} to login"
-  echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
+  echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a ${red}WHILE!!${reset} to finish install. Please run docker logs -f entsearch to view progress"
+  echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login"
+  # echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
 
   # End of Enterprise Search
 }
 
-fleet() {
-  # adding monitoring
-  VERSION=${1}
-  version ${VERSION}
+###############################################################################################################
 
+fleet() {
   # check to make sure that ES is 7.7 or greater
-  if [ ${MAJOR} = "7" ]  && [ ${MINOR} -le "13" ]; then
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.13.0") ]; then
     echo "${red}[DEBUG]${reset} FLEET started with 7.14+."
+    help
     return
   fi
 
@@ -1761,11 +1752,12 @@ fleet() {
   cat >> .env<<EOF
 FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
 EOF
-  # add to elasticsearch.yml
-  cat >> elasticsearch.yml<<EOF
+  # add to elasticsearch.yml if it doesnt exist
+  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
+    cat >> elasticsearch.yml<<EOF
 xpack.security.authc.api_key.enabled: true
 EOF
-
+  fi
   # restart elasticsearch
   for instance in es01 es02 es03
   do
@@ -1819,14 +1811,24 @@ EOF
 
   # End of FLEET
 }
+
 ###############################################################################################################
+
+if [ "${1}" != "cleanup" ]; then
+  VERSION=${2}
+  version ${VERSION}
+fi
 
 case ${1} in
   build|start|stack)
     stack ${2}
     ;;
   monitor)
-    monitor ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "6.5.0") ]; then
+      monitor ${2}
+    else
+      help
+    fi
     ;;
   snapshot)
     snapshot ${2}
@@ -1835,15 +1837,27 @@ case ${1} in
     apm ${2}
     ;;
   entsearch)
-    entsearch ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.7.0") ]; then
+      entsearch ${2}
+    else
+      help
+    fi
     ;;
   fleet)
-    fleet ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+      fleet ${2}
+    else
+      help
+    fi
     ;;
   full)
-    stack ${2}
-    monitor ${2}
-    snapshot ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "6.5.0") ]; then
+      stack ${2}
+      monitor ${2}
+      snapshot ${2}
+    else
+      help
+    fi
     ;;
   fullapm)
     stack ${2}
@@ -1852,18 +1866,36 @@ case ${1} in
     apm ${2}
     ;;
   fullentsearch)
-    stack ${2}
-    monitor ${2}
-    snapshot ${2}
-    entsearch ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.7.0") ]; then
+      stack ${2}
+      monitor ${2}
+      snapshot ${2}
+      entsearch ${2}
+    else
+      help
+    fi
+    ;;
+  fullfleet)
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+      stack ${2}
+      monitor ${2}
+      snapshot ${2}
+      fleet ${2}
+    else
+      help
+    fi
     ;;
   all)
-    stack ${2}
-    monitor ${2}
-    snapshot ${2}
-    apm ${2}
-    entsearch ${2}
-    fleet ${2}
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+      stack ${2}
+      monitor ${2}
+      snapshot ${2}
+      apm ${2}
+      entsearch ${2}
+      fleet ${2}
+    else
+      help
+    fi
     ;;
   cleanup)
     cleanup
