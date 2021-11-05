@@ -871,7 +871,7 @@ volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
   ##
   # if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
   #
-  # docker restart es01 es02 es03 
+  # docker restart es01 es02 es03
   # fi
 
 
@@ -1669,6 +1669,7 @@ ent_search.external_url: http://localhost:3002
 filebeat_log_directory: /var/log/enterprise-search
 log_directory: /var/log/enterprise-search
 secret_management.encryption_keys: [${ENCRYPTION_KEY}]
+secret_session_key: "${ENCRYPTION_KEY}"
 EOF
 
   echo "${green}[DEBUG]${reset} Created enterprise-search.yml"
@@ -1697,7 +1698,7 @@ EOF
 
   docker-compose -f entsearch-compose.yml up -d >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a ${red}WHILE!!${reset} to finish install. Please run docker logs -f entsearch to view progress"
-  echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login"
+  echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login or kibana if newer versions"
   # echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
 
   # End of Enterprise Search
