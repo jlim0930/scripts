@@ -1784,7 +1784,8 @@ EOF
   
   # Create service token
   echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
-  SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
+  # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
+  SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
 
   # create fleet.yml
   if [ ! -f ${WORKDIR}/fleet.yml ]; then
