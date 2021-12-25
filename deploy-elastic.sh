@@ -71,6 +71,15 @@ help() {
 
 ###############################################################################################################
 
+# check for dependencies, if they do not exist then install them
+# jq isn't included by default in Ubuntu, so this can easily be missed and break the script.
+checkdependencies() {
+if ! command -v jq &> /dev/null
+then
+	sudo apt install jq
+fi
+}
+
 # check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
 version() {
   if [ -z ${1} ]; then
@@ -264,6 +273,7 @@ stack() {
   echo "${green}********** Deploying elasticsearch & kibana "${VERSION}" **********${reset}"
 
   # some checks first
+  checkdependencies
   checkmaxmapcount
   checkdocker
   checkcontainer
