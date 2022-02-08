@@ -388,7 +388,7 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
     command: >
       bash -c '
-        yum install -y -q -e 0 unzip;
+        yum install -y -q -e 0 unzip >/dev/null 2>&1;
         if [[ ! -f /certs/bundle.zip ]]; then
           bin/elasticsearch-certutil cert --silent --pem --in config/certificates/instances.yml -out /certs/bundle.zip;
           unzip /certs/bundle.zip -d /certs;
@@ -509,7 +509,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.enabled=false
       - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
@@ -522,6 +522,8 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
+    ports:
+      - 9201:9200
 
   es03:
     container_name: es03
@@ -633,7 +635,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.enabled=false
       - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
@@ -646,6 +648,8 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
+    ports:
+      - 9201:9200
 
   es03:
     container_name: es03
@@ -756,7 +760,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.enabled=false
       - xpack.security.transport.ssl.enabled=true
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
@@ -766,6 +770,8 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
+    ports:
+      - 9201:9200
 
   es03:
     container_name: es03
