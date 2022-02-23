@@ -48,7 +48,7 @@ help()
   echo "${blue}COMMANDS:${reset}"
   echo "     ${green}stack|build|start${reset} - will stand up a basic elasticsearch 3 node cluster and 1 kibana"
   echo "     ${green}monitor${reset} - will stand up a stack with metricbeats monitoring"
-  echo "     ${green}snapshot${reset} - will stand up a stack with minio \(http\) as snapshot repository"
+  echo "     ${green}snapshot${reset} - will stand up a stack with minio (http) as snapshot repository"
   echo "     ${green}fleet${reset} - will stand up a stack wtih a fleet server"
   echo "     ${green}entsearch${reset} - will stand up a stack with enterprise search"
   echo "     ${green}apm${reset} - will stand up a stack with apmserver"
