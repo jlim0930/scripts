@@ -2350,11 +2350,6 @@ if [ "${1}" != "cleanup" ]; then
   version ${VERSION}
 fi
 
-if [ -z ${2} ]; then
-  help
-  exit
-fi
-
 case ${1} in
   build|start|stack)
     stack ${2}
