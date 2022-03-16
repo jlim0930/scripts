@@ -1760,6 +1760,23 @@ EOF
   # TODO: need section for add monitoring for enterprise search if metricbeat.yml exists
   ##
   ##
+  # add monitoring if monitoring is enabled and if enterprise search is 7.16.0+
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+    if [ -f "${WORKDIR}/entsearch-compose.yml" ]; then
+      echo "${green}[DEBUG]${reset} enterprise search found and the stack is 7.16.0+ - enabling enterprisesearch monitoring"
+      cat >> ${WORKDIR}/metricbeat.yml<<EOF
+metricbeat.modules:
+- module: enterprisesearch
+  metricsets: ["health", "stats"]
+  enabled: true
+  period: 10s
+  hosts: ["http://entsearch:3002"]
+  username: "elastic"
+  password: "${PASSWD}"
+EOF
+
+    fi
+  fi
 
   # start service
   echo "${green}[DEBUG]${reset} Starting monitoring....."
@@ -1973,9 +1990,6 @@ fleet() {
   # pull image
   pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
 
-  # generate kibana encryption key
-  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
-
   # add to .env
   cat >> .env<<EOF
 FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
@@ -2007,17 +2021,12 @@ EOF
   done
   echo ""
   
-  # Create service token
-  echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
-  # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
-  SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
-
   # create fleet.yml
   if [ ! -f ${WORKDIR}/fleet.yml ]; then
     # touch ${WORKDIR}/fleet.yml
     cat > ${WORKDIR}/fleet.yml <<EOF
 agent.monitoring:
-  enabled: true 
+enabled: true 
   logs: true 
   metrics: true 
   http:
@@ -2027,8 +2036,14 @@ agent.monitoring:
 EOF
   fi
 
-  # generate fleet-compose.yml
-  cat > fleet-compose.yml<<EOF
+  if [ $(checkversion $VERSION) -lt $(checkversion "8.1.0") ]; then
+    # Create service token
+    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
+    # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
+    SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+
+    # generate fleet-compose.yml
+    cat > fleet-compose.yml<<EOF
 version: '2.2'
 
 services:
@@ -2055,7 +2070,63 @@ services:
 volumes: {"certs"}
 EOF
 
-  echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+    echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+
+  elif [ $(checkversion $VERSION) -ge $(checkversion "8.1.0") ]; then
+  
+    # Create Fleet server policy
+    echo "${green}[DEBUG]${reset} Creating Fleet Server Policy"
+    curl -k -u "elastic:${PASSWD}" "https://localhost:5601/api/fleet/agent_policies?sys_monitoring=true" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    --data-raw '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}' >/dev/null 2>&1
+
+    sleep 5
+
+    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    --data-raw '{"fleet_server_hosts":["https://localhost:8220","https://localhost:8220"]}' >/dev/null 2>&1
+
+    sleep 5
+
+    # Create service token
+    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
+    SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+
+    # generate fleet-compose.yml
+    cat > fleet-compose.yml<<EOF
+version: '2.2'
+
+services:
+  fleet:
+    container_name: fleet
+    user: root
+    image: docker.elastic.co/beats/elastic-agent:${VERSION}
+    environment:
+      - FLEET_SERVER_ENABLE=true
+      - FLEET_URL=https://fleet:8220
+      - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
+      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certificates/fleet/fleet.crt
+      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certificates/fleet/fleet.key
+      - FLEET_SERVER_SERVICE_TOKEN=${SERVICETOKEN}
+      - FLEET_SERVER_POLICY=fleet-server-policy
+      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
+    ports:
+      - 8220:8220
+      - 6791:6791
+    restart: on-failure
+    volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
+
+volumes: {"certs"}
+EOF
+
+    echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+
+  fi
 
   docker-compose -f fleet-compose.yml up -d >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Started FLEET SERVER. - Please give it about a minute for things to settle before you go into the FLEET app."
@@ -2196,6 +2267,26 @@ EOF
   echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a ${red}WHILE!!${reset} to finish install. Please run docker logs -f entsearch to view progress"
   echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login or kibana if newer versions"
   # echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
+
+
+  # add monitoring if monitoring is enabled and if enterprise search is 7.16.0+
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+    if [ -f "${WORKDIR}/monitor-compose.yml" ]; then
+      echo "${green}[DEBUG]${reset} monitoring found and the stack is 7.16.0+ - enabling enterprisesearch monitoring"
+      cat >> ${WORKDIR}/metricbeat.yml<<EOF
+metricbeat.modules:
+- module: enterprisesearch
+  metricsets: ["health", "stats"]
+  enabled: true
+  period: 10s
+  hosts: ["http://entsearch:3002"]
+  username: "elastic"
+  password: "${PASSWD}"
+EOF
+      docker restart metricbeat >/dev/null 2>&1
+      echo "${green}[DEBUG]${reset} metricbeat container restarted"
+    fi
+  fi
 
 } # End of Enterprise Search
 
