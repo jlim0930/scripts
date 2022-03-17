@@ -116,18 +116,26 @@ checkmaxmapcount() {
 
 # check to ensure docker is running and you can run docker commands
 checkdocker() {
+  # check to ensure docker is installed or exit
   docker info >/dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} Docker is not running or you are not part of the docker group"
     exit
   fi
 
-  # check to ensure docker-compose is installed
+  # check to ensure docker-compose is installed or exit
   docker-compose version >/dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} docker-compose is not installed.  Please install docker-compose and try again"
     exit
   fi
+
+  # check to ensure jq is installed or exit
+  if ! [ -x "$(command -v jq)" ]; then
+    echo "${red}[DEBUG]${reset} jq is not installed.  Please install jq and try again"
+    exit
+  fi
+
 } # end of checkdocker function
 
 # check to see if containers/networks/volumes exists
@@ -219,6 +227,7 @@ cleanup() {
   echo "${green}[DEBUG]${reset} All cleanedup"
 
 } # end of cleanup function
+
 
 ###############################################################################################################
 # build stack
