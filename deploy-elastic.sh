@@ -2088,15 +2088,56 @@ EOF
     curl -k -u "elastic:${PASSWD}" "https://localhost:5601/api/fleet/agent_policies?sys_monitoring=true" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    --data-raw '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}' >/dev/null 2>&1
+    -d '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}'
 
     sleep 5
-
+    
+    # Setting Fleet URL
     echo "${green}[DEBUG]${reset} Setting Fleet URL"
     curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    --data-raw '{"fleet_server_hosts":["https://localhost:8220","https://localhost:8220"]}' >/dev/null 2>&1
+    -d '{"fleet_server_hosts":["https://localhost:8220"]}'
+
+    sleep 5
+
+    # setting Elasticsearch URL and SSL certificate and fingerprint
+    echo "${green}[DEBUG]${reset} Setting Elasticsearch URL & Fingerprint & SSL CA"
+    
+    ## fingerprint
+    FINGERPRINT=`openssl x509 -fingerprint -sha256 -noout -in ${WORKDIR}/ca.crt | awk -F"=" {' print $2 '} | sed s/://g`
+    
+    ## ssl ca
+    if [ -f ${WORKDIR}/ca.temp ]; then
+      rm -rf ${WORKDIR}/ca.temp
+    fi
+    while read line
+    do
+      echo "    ${line}" >> ${WORKDIR}/ca.temp
+    done < ${WORKDIR}/ca.crt
+    truncate -s -1 ${WORKDIR}/ca.temp
+    CA=$(jq -R -s '.' < ${WORKDIR}/ca.temp | tr -d '"')
+    rm -rf ${WORKDIR}/ca.temp
+
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "name": "default",
+  "type": "elasticsearch",
+  "hosts": ["https://localhost:9200"],
+  "is_default": true,
+  "is_default_monitoring": true,
+  "ca_trusted_fingerprint": "${FINGERPRINT}",
+  "config_yaml": "ssl:\n  certificate_authorities:\n  - |\n${CA}"
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)"
 
     sleep 5
 
