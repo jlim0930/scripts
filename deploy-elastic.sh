@@ -1274,8 +1274,8 @@ monitor() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested monitoring for ${VERSION}"
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
     exit
   fi
 
@@ -1816,8 +1816,8 @@ snapshot() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
     exit
   fi
 
@@ -1985,9 +1985,9 @@ fleet() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
   # grab the elastic password
@@ -2088,7 +2088,7 @@ EOF
     curl -k -u "elastic:${PASSWD}" "https://localhost:5601/api/fleet/agent_policies?sys_monitoring=true" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    -d '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}'
+    -d '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}' >/dev/null 2>&1
 
     sleep 5
     
@@ -2097,7 +2097,7 @@ EOF
     curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    -d '{"fleet_server_hosts":["https://localhost:8220"]}'
+    -d '{"fleet_server_hosts":["https://localhost:8220"]}' >/dev/null 2>&1
 
     sleep 5
 
@@ -2137,7 +2137,7 @@ EOF
     curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    -d "$(generate_post_data)"
+    -d "$(generate_post_data)" >/dev/null 2>&1
 
     sleep 5
 
@@ -2212,9 +2212,9 @@ entsearch() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
   # grab the elastic password
@@ -2365,9 +2365,9 @@ apm() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
   # grab the elastic password
