@@ -1999,6 +1999,16 @@ fleet() {
   # pull image
   pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
 
+  # get IP
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    IP=`ip route get 1 | awk '{print $NF;exit}'`
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'`
+    IP=`ifconfig ${INTERFACE} | grep inet | awk '{ print $2 }'`
+  else
+    IP="NEED2UPDATE"
+  fi
+
   # add to .env
   cat >> .env<<EOF
 FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
@@ -2022,7 +2032,7 @@ EOF
   # bootstrap fleet on ES & KB
   echo "${green}[DEBUG]${reset} Setting up kibana for fleet"
   curl -k -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' >/dev/null 2>&1
-  sleep 60 & # no healthchecks on fleet so just going to sleep for 60
+  sleep 70 & # no healthchecks on fleet so just going to sleep for 60
   while kill -0 $! >/dev/null 2>&1
   do
     echo -n "."
@@ -2081,6 +2091,70 @@ EOF
 
     echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
 
+    # Setting Fleet URL
+    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+
+    sleep 5
+    
+    ## ssl ca
+    if [ -f ${WORKDIR}/ca.temp ]; then
+      rm -rf ${WORKDIR}/ca.temp
+    fi
+    while read line
+    do
+      echo "    ${line}" >> ${WORKDIR}/ca.temp
+    done < ${WORKDIR}/ca.crt
+    truncate -s -1 ${WORKDIR}/ca.temp
+    CA=$(jq -R -s '.' < ${WORKDIR}/ca.temp | tr -d '"')
+    rm -rf ${WORKDIR}/ca.temp
+
+    if [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
+      generate_post_data()
+        {
+          cat <<EOF
+{
+  "hosts":["https://${IP}:9200"],
+  "config_yaml":"ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
+}
+EOF
+        }
+
+      curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+      --header 'kbn-xsrf: true' \
+      --header 'Content-Type: application/json' \
+      -d "$(generate_post_data)" >/dev/null 2>&1
+
+      sleep 5
+    else
+
+      generate_post_data()
+      {
+        cat <<EOF
+{
+  "name": "default",
+  "type": "elasticsearch",
+  "hosts": ["https://${IP}:9200"],
+  "is_default": true,
+  "is_default_monitoring": true,
+  "ca_trusted_fingerprint": "${FINGERPRINT}",
+  "config_yaml": "ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
+}
+EOF
+      }
+
+      curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+      --header 'kbn-xsrf: true' \
+      --header 'Content-Type: application/json' \
+      -d "$(generate_post_data)" >/dev/null 2>&1
+
+      sleep 5
+
+    fi
+
   elif [ $(checkversion $VERSION) -ge $(checkversion "8.1.0") ]; then
   
     # Create Fleet server policy
@@ -2097,7 +2171,7 @@ EOF
     curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
     --header 'kbn-xsrf: true' \
     --header 'Content-Type: application/json' \
-    -d '{"fleet_server_hosts":["https://localhost:8220"]}' >/dev/null 2>&1
+    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
 
     sleep 5
 
@@ -2125,11 +2199,11 @@ EOF
 {
   "name": "default",
   "type": "elasticsearch",
-  "hosts": ["https://localhost:9200"],
+  "hosts": ["https://${IP}:9200"],
   "is_default": true,
   "is_default_monitoring": true,
   "ca_trusted_fingerprint": "${FINGERPRINT}",
-  "config_yaml": "ssl:\n  certificate_authorities:\n  - |\n${CA}"
+  "config_yaml": "ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
 }
 EOF
     }
