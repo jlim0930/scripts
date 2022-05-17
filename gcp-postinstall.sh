@@ -5,7 +5,6 @@
 
 # create a flag file and check for it
 if [ -f /ran_startup ]; then
-  logger "ran_startup complete"
   exit;
 fi
 
