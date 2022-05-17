@@ -44,7 +44,7 @@ yum install epel-release -y
 yum install bash-completion git wget nmap bc -y
 
 # disable services
-for service in auditd firewalld mdmonitor
+for service in auditd firewalld mdmonitor postfix
 do
   systemctl disable ${service}
 done
