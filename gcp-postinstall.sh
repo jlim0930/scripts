@@ -15,7 +15,7 @@ setenforce Permissive
 # create elasticsearch repo
 rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
 cat >> /etc/yum.repos.d/elasticsearch.repo<<EOF
-[elasticsearch]
+[elasticsearch-7]
 name=Elasticsearch repository for 7.x packages
 baseurl=https://artifacts.elastic.co/packages/7.x/yum
 gpgcheck=1
@@ -24,7 +24,7 @@ enabled=1
 autorefresh=1
 type=rpm-md
 
-[elasticsearch]
+[elasticsearch-8]
 name=Elasticsearch repository for 8.x packages
 baseurl=https://artifacts.elastic.co/packages/8.x/yum
 gpgcheck=1
