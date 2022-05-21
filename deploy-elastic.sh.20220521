@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
+# version 7.0 - added ES 8 only
 # version 6.2 - changed the way fleet is bootstrapped
 # version 6.1 - added additional functions and cleaned up
 # version 5.0 - added fleet
@@ -12,6 +13,7 @@
 # $ curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o deploy-elastic.sh
 
 # es01 is exposed on 9200 with SSL
+# es02 is exposed on 9201 without SSL ( only for < 8.0.0 )
 # kibana is exposed on 5601 with SSL
 # enterprise-search is exposed on 3002 without SSL
 # fleet is exposed on 8220
@@ -22,8 +24,11 @@
 HEAP="512m"
 
 ###############################################################################################################
+
 # set WORKDIR
 WORKDIR="${HOME}/elasticstack"
+
+###############################################################################################################
 
 # colors
 red=`tput setaf 1`
@@ -33,48 +38,51 @@ reset=`tput sgr0`
 
 ###############################################################################################################
 
-help() {
-  echo "This script currently works on all 7.x and 6.x versions of elasticsearch"
+# help function
+help()
+{
+  echo "${green}This script currently works on all versions of elasticsearch 6.x-8.x${reset}"
   echo ""
   echo "${green}Usage:${reset} ./`basename $0` command version"
-  echo "${blue}COMMANDS${reset}"
-  echo "  build|start|stack VERSION - Starts a basic deployment of ES & Kibana.  Must give the full version"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` build 7.15.0"
-  echo "  ${blue}monitor${reset} - Starts the stack with  metricbeat & filebeat monitoring. ${red}Only for version 6.5+${reset}"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` monitor 7.10.2"
-  echo "  ${blue}snapshot${reset} - Starts the stack with minio and configure for snapshots.  For 7.4+ it will also setup SLM."
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` snapshot 7.10.2"
-  echo "  ${blue}full${reset} - Starts the stack with monitoring & snapshots"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` full 7.10.2"
   echo ""
-  echo "  ${blue}apm${reset} - Starts the stack with apm-server"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` apm 7.10.2"
-  echo "  ${blue}fullapm${reset} - Starts the stack with monitoring, snapshots, & apm-server.  ${red}Only for version 6.5+${reset}"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullapm 7.10.2"
+  echo "${blue}COMMANDS:${reset}"
+  echo "     ${green}stack|build|start${reset} - will stand up a basic elasticsearch 3 node cluster and 1 kibana"
+  echo "     ${green}monitor${reset} - will stand up a stack with metricbeats monitoring"
+  echo "     ${green}snapshot${reset} - will stand up a stack with minio (http) as snapshot repository"
+  echo "     ${green}fleet${reset} - will stand up a stack wtih a fleet server"
+  echo "     ${green}entsearch${reset} - will stand up a stack with enterprise search"
+  echo "     ${green}apm${reset} - will stand up a stack with apmserver"
   echo ""
-  echo "  ${blue}entsearch${reset} - Starts the stack with enterprise search. ${red}Enterprise Search is only available on 7.7+${reset}"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` entsearch 7.10.2"
-  echo "  ${blue}fullentsearch${reset} - Starts the stack wtih monitoring, snapshots, & Enterprise Search"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullentsearch 7.10.2"
+  echo "     ${green}cleanup${reset} - cleanup the deployment and delete it and all of its resources minus images"
   echo ""
-	echo "  ${blue}fleet${reset} - Starts deployment with fleet server ${red}Fleet Server is only available on 7.10+${reset}"
-	echo "    ${green}EXAMPLE:${reset} ./`basename $0` fleet 7.14.1"
-  echo "  ${blue}fullfleet${reset} - Starts the stack wtih monitoring, snapshots, & fleet server"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` fullfleet 7.14.1"
-	echo ""
-  echo "  ${blue}all${reset} - Starts deployment with everything! ${red}Enterprise Search is only available on 7.7+${reset}"
-  echo "    ${green}EXAMPLE:${reset} ./`basename $0` all 7.10.2"
+  echo "Each ${blue}command${reset} is additive, if you stood up a basic stack and want to add on monitoring just run the ${blue}command${reset} again with COMMAND as monitor and it will add it to the same stack"
   echo ""
-	echo "  ${blue}cleanup${reset} - cleans up all the containers and directories"
-}
-
+  echo "${blue}MATRIX${reset}"
+  fmt="%20s %10s %10s %10s\n"
+  printf "$fmt" "" "6.x" "7.x" "8.x"
+  printf "$fmt" "elasticstack" "*" "*" "*"
+  printf "$fmt" "monitoring" "6.5.0+" "*" "*"
+  printf "$fmt" "snapshot" "*" "*" "*"
+  printf "$fmt" "fleet" "x" "7.10.0+" "*"
+  printf "$fmt" "enterprise search" "x" "7.7.0+" "*"
+  printf "$fmt" "apm server" "*" "-7.16.0" "x"
+  echo ""
+  echo "apm server was moved to fleet integrations starting 7.16.0 - Please use fleet"
+  echo ""
+  echo "If running locally after the stack is deployed you can grab all the passwords from ~/elasticstack/notes"
+  echo "To access kibana browse to https://localhost:5601, if remotely https://IPofREMOTEhost:5601"
+  echo ""
+} # end of help function
 
 ###############################################################################################################
+
+# functions
 
 # check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
 version() {
   if [ -z ${1} ]; then
     help
+    exit
   else
     re="^[6-8]{1}[.][0-9]{1,2}[.][0-9]{1,2}$"
     if [[ ${1} =~ ${re} ]]; then
@@ -83,14 +91,15 @@ version() {
       BUGFIX="$(echo ${1} | awk -F. '{ print $3 }')"
     else
       help
+      exit
     fi
   fi
-}
+} # end of version function
 
-# function used for version checking
+# function used for version checking and comparing
 checkversion() {
   echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'
-}
+} # end of checkversion function
 
 # check vm.max_map_count on linux and ask user to set it if not set properly
 checkmaxmapcount() {
@@ -100,30 +109,38 @@ checkmaxmapcount() {
       echo "${green}[DEBUG]${reset} Ensuring vm.max_map_count is ${COUNT}... proceeding"
     else
       echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
-      exit;
+      exit
     fi
   fi
-}
+} # end of checkmaxmapcount function
 
 # check to ensure docker is running and you can run docker commands
 checkdocker() {
+  # check to ensure docker is installed or exit
   docker info >/dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} Docker is not running or you are not part of the docker group"
     exit
   fi
 
-  # check to ensure docker-compose is installed
+  # check to ensure docker-compose is installed or exit
   docker-compose version >/dev/null 2>&1
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} docker-compose is not installed.  Please install docker-compose and try again"
     exit
   fi
-}
+
+  # check to ensure jq is installed or exit
+  if ! [ -x "$(command -v jq)" ]; then
+    echo "${red}[DEBUG]${reset} jq is not installed.  Please install jq and try again"
+    exit
+  fi
+
+} # end of checkdocker function
 
 # check to see if containers/networks/volumes exists
 checkcontainer() {
-  for name in es01 es02 es03 kibana
+  for name in es01 es02 es03 kibana es_mc_1 es_wait_until_ready_1 apm es_setup_1
   do
     if [ $(docker ps -a --format '{{.Names}}' | grep -c ${name}) -ge 1  ]; then
       echo "${red}[DEBUG]${reset} Container ${green}${name}${reset} exists.  Please remove and try again"
@@ -137,54 +154,45 @@ checkcontainer() {
       exit
     fi
   done
-  for name in es_data01 es_data02 es_data03 es_certs
+  for name in es_data01 es_data02 es_data03 es_certs es_fleet es_certs es_kibanadata
   do
     if [ $(docker volume ls --format '{{.Name}}' | grep -c ${name}) -ge 1 ]; then
       echo "${red}[DEBUG]${reset} Volume ${green}${name}${reset} exists.  Please remove and try again"
       exit
     fi
   done
-}
+} # end of checkcontainer function
 
 # check to make sure that the deployment is in GREEN status
 checkhealth() {
-  if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
-    while true
-    do
-      if [ `docker run --rm -v es_certs:/certs --network=es_default docker.elastic.co/elasticsearch/elasticsearch:${VERSION} curl -s --cacert /certs/ca/ca.crt -u elastic:${PASSWD}   https://es01:9200/_cluster/health | grep -c green` = 1 ]; then
-        sleep 2
-        break
-      else
-        echo "${red}[DEBUG]${reset} elasticsearch is unhealthy. Checking again in 2 seconds.. if this doesnt finish in ~ 30 seconds something is wrong ctrl-c please."
-        sleep 2
-      fi
-    done
-  else
-    while true
-    do
-      if [ `curl --cacert certs/ca/ca.crt -s -u elastic:${PASSWD} https://localhost:9200/_cluster/health | grep -c green` = 1 ]; then
-        sleep 2
-        break
-      else
-        echo "${red}[DEBUG]${reset} elasticsearch is unhealthy. Checking again in 2 seconds... if this doesnt finish in ~ 30 seconds something is wrong ctrl-c please."
-        sleep 2
-      fi
-    done
-  fi
+  while true
+  do
+    if [ `curl -s --cacert ${WORKDIR}/ca.crt -u elastic:${PASSWD} https://localhost:9200/_cluster/health | grep -c green` = 1 ]; then
+      sleep 2
+      break
+    else
+      echo "${red}[DEBUG]${reset} elasticsearch is unhealthy. Checking again in 2 seconds... if this doesnt finish in ~ 30 seconds something is wrong ctrl-c please."
+      sleep 2
+    fi
+  done
 
   echo "${green}[DEBUG]${reset} elasticsearch health is ${green}GREEN${reset} moving forward."
-}
+} # end of checkhealth function
 
 # grab the elastic password
 grabpasswd() {
-  PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    PASSWD=`cat notes | grep ELASTIC_PASSWORD | awk -F"=" {' print $2 '}`
+  else
+    PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
+  fi  
   if [ -z ${PASSWD} ]; then
     echo "${red}[DEBUG]${reset} unable to find elastic users password"
-  	exit
+    exit
   else
     echo "${green}[DEBUG]${reset} elastic user's password found ${PASSWD}"
   fi
-}
+} # end of grabpasswd function
 
 # checking for the image and pull it
 pullimage() {
@@ -199,71 +207,35 @@ pullimage() {
   else
     echo "${green}[DEBUG]${reset} "${1}" docker image already exists.. moving forward.."
   fi
-}
+} # end of pullimage function
 
 # cleanup deployment
 cleanup() {
-  echo "${green}********** Cleaning up "${VERSION}" **********${reset}"
-
-  # check to see if the directory exists should not since this is the start
-  STRING="-f stack-compose.yml"
-  LIST="es01 es02 es03 kibana es_wait_until_ready_1"
-
-  if [ -z ${WORKDIR} ]; then
-    cd ${WORKDIR}
-
-    if [ -f monitor-compose.yml ]; then
-      STRING="${STRING} -f monitor-compose.yml"
-      LIST="${LIST} metricbeat filebeat"
-    fi
-
-    if [ -f snapshot-compose.yml ]; then
-      STRING="${STRING} -f snapshot-compose.yml"
-      LIST="${LIST} minio01 es_mc_1"
-    fi
-
-    if [ -f apm-compose.yml ]; then
-      STRING="${STRING} -f apm-compose.yml"
-      LIST="${LIST} apm"
-    fi
-
-    if [ -f entsearch-compose.yml ]; then
-      STRING="${STRING} -f entsearch-compose.yml"
-      LIST="${LIST} entsearch"
-    fi
-
-    if [ -f fleet.yml ]; then
-      STRING="${STRING} -f fleet.yml"
-      LIST="${LIST} fleet"
-    fi
-
-    docker-compose ${STRING} down >/dev/null 2>&1
-    echo "${green}[DEBUG]${reset} Performed docker-compose down"
-
-  fi
-
-  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
-  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm >/dev/null 2>&1
+  echo "${green}********** Cleaning up **********${reset}"
+  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 >/dev/null 2>&1
+  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 >/dev/null 2>&1
   docker network rm es_default >/dev/null 2>&1
   docker volume rm es_data01 >/dev/null 2>&1
   docker volume rm es_data02 >/dev/null 2>&1
   docker volume rm es_data03 >/dev/null 2>&1
   docker volume rm es_fleet >/dev/null 2>&1
   docker volume rm es_certs >/dev/null 2>&1
+  docker volume rm es_kibanadata >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Removed volumes and networks"
 
   rm -rf ${WORKDIR} >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} All cleanedup"
 
-}
+} # end of cleanup function
+
 
 ###############################################################################################################
+# build stack
 
-# building the stack
 stack() {
   echo "${green}********** Deploying elasticsearch & kibana "${VERSION}" **********${reset}"
 
-  # some checks first
+  # run checks to ensure you have all the prereqs
   checkmaxmapcount
   checkdocker
   checkcontainer
@@ -271,14 +243,9 @@ stack() {
   # check to see if the directory exists should not since this is the start
   if [ -d ${WORKDIR} ]; then
     echo "${red}[DEBUG]${reset} Looks like ${WORKDIR} already exists.  Please run cleanup to delete the old deployment"
-    echo ""
     help
-	exit
-  fi
-
-  # pull stack images
-  pullimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
-  pullimage "docker.elastic.co/kibana/kibana:${VERSION}"
+	  exit
+  fi # end of if to check if WORKDIR exist
 
   # create directorys and files
   mkdir -p ${WORKDIR}
@@ -286,39 +253,407 @@ stack() {
   mkdir temp
   echo ${VERSION} > VERSION
 
-  # create elasticsearch.yml
-  cat > elasticsearch.yml<<EOF
-network.host: 0.0.0.0
-EOF
-
-  chown 1000 elasticsearch.yml >/dev/null 2>&1
-  echo "${green}[DEBUG]${reset} Created elasticsearch.yml"
+  # pull stack images
+  pullimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
+  pullimage "docker.elastic.co/kibana/kibana:${VERSION}"
 
   # generate temp elastic password
   PASSWD=`openssl rand -base64 29 | tr -d "=+/" | cut -c1-25`
-  echo "${green}[DEBUG]${reset} Setting temp password for elastic as ${PASSWD}"
+  echo "${green}[DEBUG]${reset} Setting  password for elastic as ${PASSWD}"
 
-  # create temp kibana.yml
-  cat > kibana.yml<<EOF
+  # Start build
+  # if version is 8.0.0 or higher
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    
+    # create elasticsearch.yml
+    cat > elasticsearch.yml<<EOF
+network.host: 0.0.0.0
+EOF
+    chown 1000 elasticsearch.yml >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} elasticsearch.yml created"
+
+    # create kibana.yml
+    cat > kibana.yml<<EOF
+server.host: "0.0.0.0"
+server.shutdownTimeout: "5s"
+EOF
+    echo "${green}[DEBUG]${reset} kibana.yml created"
+
+    # create .env file
+    cat > .env<<EOF
+ELASTIC_PASSWORD=${PASSWD}
+KIBANA_PASSWORD=${PASSWD}
+STACK_VERSION=${VERSION}
+CLUSTER_NAME=lab
+LICENSE=trial
+ES_PORT=9200
+KIBANA_PORT=5601
+MEM_LIMIT=1073741824
+COMPOSE_PROJECT_NAME=es
+EOF
+    echo "${green}[DEBUG]${reset} .env created"
+
+    # start creating stack-compose.yml
+    cat > stack-compose.yml<<EOF
+version: "2.2"
+
+services:
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - ./temp:/temp
+    user: "0"
+    command: >
+      bash -c '
+        if [ x\${ELASTIC_PASSWORD} == x ]; then
+          echo "Set the ELASTIC_PASSWORD environment variable in the .env file";
+          exit 1;
+        elif [ x\${KIBANA_PASSWORD} == x ]; then
+          echo "Set the KIBANA_PASSWORD environment variable in the .env file";
+          exit 1;
+        fi;
+        if [ ! -f certs/ca.zip ]; then
+          echo "Creating CA";
+          bin/elasticsearch-certutil ca --silent --pem -out config/certs/ca.zip;
+          unzip config/certs/ca.zip -d config/certs; unzip config/certs/ca.zip -d /temp/certs;
+        fi;
+        if [ ! -f certs/certs.zip ]; then
+          echo "Creating certs";
+          echo -ne \
+          "instances:\n"\
+          "  - name: es01\n"\
+          "    dns:\n"\
+          "      - es01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: es02\n"\
+          "    dns:\n"\
+          "      - es02\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: es03\n"\
+          "    dns:\n"\
+          "      - es03\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: kibana\n"\
+          "    dns:\n"\
+          "      - kibana\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: apm\n"\
+          "    dns:\n"\
+          "      - apm\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: entsearch\n"\
+          "    dns:\n"\
+          "      - entsearch\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: fleet\n"\
+          "    dns:\n"\
+          "      - fleet\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          "  - name: minio01\n"\
+          "    dns:\n"\
+          "      - minio01\n"\
+          "      - localhost\n"\
+          "    ip:\n"\
+          "      - 127.0.0.1\n"\
+          > config/certs/instances.yml;
+          bin/elasticsearch-certutil cert --silent --pem -out config/certs/certs.zip --in config/certs/instances.yml --ca-cert config/certs/ca/ca.crt --ca-key config/certs/ca/ca.key;
+          unzip config/certs/certs.zip -d config/certs; unzip config/certs/certs.zip -d /temp/certs; chmod -R 777 /temp/certs;
+        fi;
+        echo "Setting file permissions"
+        chown -R root:root config/certs;
+        find . -type d -exec chmod 750 \{\} \;;
+        find . -type f -exec chmod 640 \{\} \;;
+        echo "Waiting for Elasticsearch availability";
+        until curl -s --cacert config/certs/ca/ca.crt https://es01:9200 | grep -q "missing authentication credentials"; do sleep 30; done;
+        echo "Setting kibana_system password";
+        until curl -s -X POST --cacert config/certs/ca/ca.crt -u elastic:\${ELASTIC_PASSWORD} -H "Content-Type: application/json" https://es01:9200/_security/user/kibana_system/_password -d "{\"password\":\"\${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
+        echo "All done!";
+      '
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f config/certs/es01/es01.crt ]"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  es01:
+    container_name: es01
+    depends_on:
+      setup:
+        condition: service_healthy
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - data01:/usr/share/elasticsearch/data
+      - ./temp:/temp
+      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    ports:
+      - \${ES_PORT}:9200
+    environment:
+      - node.name=es01
+      - node.attr.data=hot
+      - node.attr.data2=hot
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone1
+      - cluster.name=\${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es02,es03
+      - ELASTIC_PASSWORD=\${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/es01/es01.key
+      - xpack.security.http.ssl.certificate=certs/es01/es01.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.http.ssl.verification_mode=certificate
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/es01/es01.key
+      - xpack.security.transport.ssl.certificate=certs/es01/es01.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=\${LICENSE}
+    mem_limit: \${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  es02:
+    container_name: es02
+    depends_on:
+      - es01
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - data02:/usr/share/elasticsearch/data
+      - ./temp:/temp
+      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    environment:
+      - node.name=es02
+      - node.attr.data=hot
+      - node.attr.data2=warm
+      - node.attr.zone=zone1
+      - node.attr.zone2=zone2
+      - cluster.name=\${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es01,es03
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/es02/es02.key
+      - xpack.security.http.ssl.certificate=certs/es02/es02.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.http.ssl.verification_mode=certificate
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/es02/es02.key
+      - xpack.security.transport.ssl.certificate=certs/es02/es02.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=\${LICENSE}
+    mem_limit: \${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  es03:
+    container_name: es03
+    depends_on:
+      - es02
+    image: docker.elastic.co/elasticsearch/elasticsearch:${VERSION}
+    labels:
+      co.elastic.logs/module: elasticsearch
+    volumes:
+      - certs:/usr/share/elasticsearch/config/certs
+      - data03:/usr/share/elasticsearch/data
+      - ./temp:/temp
+      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    environment:
+      - node.name=es03
+      - node.attr.data=warm
+      - node.attr.data2=cold
+      - node.attr.zone=zone2
+      - node.attr.zone2=zone3
+      - cluster.name=\${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es01,es02
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.key=certs/es03/es03.key
+      - xpack.security.http.ssl.certificate=certs/es03/es03.crt
+      - xpack.security.http.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.http.ssl.verification_mode=certificate
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.key=certs/es03/es03.key
+      - xpack.security.transport.ssl.certificate=certs/es03/es03.crt
+      - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
+      - xpack.security.transport.ssl.verification_mode=certificate
+      - xpack.license.self_generated.type=\${LICENSE}
+    mem_limit: \${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  kibana:
+    container_name: kibana
+    depends_on:
+      es01:
+        condition: service_healthy
+      es02:
+        condition: service_healthy
+      es03:
+        condition: service_healthy
+    image: docker.elastic.co/kibana/kibana:${VERSION}
+    labels:
+      co.elastic.logs/module: kibana
+    volumes:
+      - certs:/usr/share/kibana/config/certs
+      - kibanadata:/usr/share/kibana/data
+      - ./temp:/temp
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml
+    ports:
+      - \${KIBANA_PORT}:5601
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=https://es01:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=\${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
+      - SERVER_SSL_KEY=config/certs/kibana/kibana.key
+    mem_limit: \${MEM_LIMIT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s --cacert config/certs/ca/ca.crt -I https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+volumes:
+  certs:
+    driver: local
+  data01:
+    driver: local
+  data02:
+    driver: local
+  data03:
+    driver: local
+  kibanadata:
+    driver: local
+EOF
+    echo "${green}[DEBUG]${reset} stack-compose.yml created"
+
+    # start cluster
+    echo "${green}[DEBUG]${reset} Starting our deployment"
+    docker-compose -f stack-compose.yml up -d
+
+    # copy out ca.crt to ${WORKDIR}
+    cp ${WORKDIR}/temp/certs/ca/ca.crt ${WORKDIR}/
+    chmod 644 ${WORKDIR}/ca.crt
+    echo "${green}[DEBUG]${reset} Copied ca.crt to ${WORKDIR}"
+    
+    # Copy the password to notes
+    cat ${WORKDIR}/.env | grep PASSWORD > ${WORKDIR}/notes
+
+    # generate kibana encryption key
+    ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
+
+    # update kibana.yml with encryption keys
+    cat >> kibana.yml<<EOF
+xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.encryptedSavedObjects.encryptionKey: "${ENCRYPTION_KEY}"
+xpack.reporting.kibanaServer.hostname: "localhost"
+EOF
+    echo "${green}[DEBUG]${reset} Generated encryption keys for kibana"
+    
+    # restarting kibana
+    docker restart kibana >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Restarted kibana to pick encryption keys"
+
+    # end of build for 8.0.0+
+  
+  elif [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
+
+    # start build for 8.0.0-
+
+    # create elasticsearch.yml
+    cat > elasticsearch.yml<<EOF
+network.host: 0.0.0.0
+EOF
+    chown 1000 elasticsearch.yml >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Created elasticsearch.yml"
+
+    # create temp kibana.yml
+    cat > kibana.yml<<EOF
 elasticsearch.username: "elstic"
 elasticsearch.password: "${PASSWD}"
 EOF
+    echo "${green}[DEBUG]${reset} Created kibana.yml"
 
-  echo "${green}[DEBUG]${reset} Created kibana.yml"
-
-  # create env file
-  cat > .env<<EOF
+    # create env file
+    cat > .env<<EOF
 COMPOSE_PROJECT_NAME=es
 CERTS_DIR=/usr/share/elasticsearch/config/certificates
 KIBANA_CERTS_DIR=/usr/share/kibana/config/certificates
 ELASTIC_PASSWORD=${PASSWD}
 COMPOSE_HTTP_TIMEOUT=600
 EOF
+    echo "${green}[DEBUG]${reset} Created .env file"
 
-  echo "${green}[DEBUG]${reset} Created .env file"
-
-  # create instances file
-  cat > instances.yml<<EOF
+    # create instances file
+    cat > instances.yml<<EOF
 instances:
   - name: es01
     dns:
@@ -376,11 +711,10 @@ instances:
     ip:
       - 127.0.0.1
 EOF
+    echo "${green}[DEBUG]${reset} Created instances.yml"
 
-  echo "${green}[DEBUG]${reset} Created instances.yml"
-
-  # start creating create-certs.yml
-  createcertscurrent="version: '2.2'
+    # start creating create-certs.yml
+    createcertscurrent="version: '2.2'
 
 services:
   create_certs:
@@ -402,7 +736,7 @@ services:
 volumes: {"certs"}
   "
 
-  createcerts71="version: '2.2'
+    createcerts71="version: '2.2'
 
 services:
   create_certs:
@@ -424,7 +758,6 @@ services:
     volumes: ['.:/usr/share/elasticsearch/config/certificates']
 
   "
-
     createcerts6="version: '2.2'
 
 services:
@@ -447,15 +780,19 @@ services:
     volumes: ['.:/usr/share/elasticsearch/config/certificates']
   "
 
-  if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
-    echo "${createcertscurrent}" > create-certs.yml
-  else
-    echo "${createcerts6}" > create-certs.yml
-  fi
-  echo "${green}[DEBUG]${reset} Created create-certs.yml for ${VERSION}"
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
+      echo "${createcertscurrent}" > create-certs.yml
+    else
+      echo "${createcerts6}" > create-certs.yml
+    fi
+    echo "${green}[DEBUG]${reset} Created create-certs.yml for ${VERSION}"
 
-  # create stack-compose.yml
-  stackcomposecurrent="version: '2.2'
+    # create certificates
+    echo "${green}[DEBUG]${reset} Create certificates"
+    docker-compose -f create-certs.yml run --rm create_certs
+
+    # create stack-compose.yml
+    stackcomposecurrent="version: '2.2'
 
 services:
   es01:
@@ -509,7 +846,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
@@ -522,8 +859,6 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', 'certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
-    ports:
-      - 9201:9200
 
   es03:
     container_name: es03
@@ -581,7 +916,7 @@ services:
 volumes: {\"data01\", \"data02\", \"data03\", \"certs\"}
   "
 
-  stackcompose71="version: '2.2'
+    stackcompose71="version: '2.2'
 
 services:
   es01:
@@ -635,7 +970,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=true
       - xpack.security.http.ssl.key=\$CERTS_DIR/es02/es02.key
       - xpack.security.http.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
       - xpack.security.http.ssl.certificate=\$CERTS_DIR/es02/es02.crt
@@ -648,8 +983,6 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
-    ports:
-      - 9201:9200
 
   es03:
     container_name: es03
@@ -707,7 +1040,7 @@ services:
 volumes: {\"data01\", \"data02\", \"data03\", \"certs\"}
   "
 
-  stackcompose6="version: '2.2'
+    stackcompose6="version: '2.2'
 
 services:
   es01:
@@ -760,7 +1093,7 @@ services:
       - \"ES_JAVA_OPTS=-Xms${HEAP} -Xmx${HEAP}\"
       - xpack.license.self_generated.type=trial
       - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=true
       - xpack.security.transport.ssl.enabled=true
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.ssl.certificate_authorities=\$CERTS_DIR/ca/ca.crt
@@ -770,8 +1103,6 @@ services:
       co.elastic.logs/module: elasticsearch
     volumes: ['data02:/usr/share/elasticsearch/data', './certs:\$CERTS_DIR', './elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml', './temp:/temp']
     restart: on-failure
-    ports:
-      - 9201:9200
 
   es03:
     container_name: es03
@@ -826,106 +1157,94 @@ services:
 
 volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
   "
-
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
-    echo "${stackcomposecurrent}" > stack-compose.yml
-  elif [ ${MAJOR} = "7" ] && [ ${MINOR} -le "1" ]; then
-    echo "${stackcompose71}" > stack-compose.yml
-  else
-    echo "${stackcompose6}" > stack-compose.yml
-    if [ ${MAJOR} = "6" ] && [ ${MINOR} -le "5" ]; then
-      if [ "`uname -s`" != "Darwin" ]; then
-        sed -i 's/ELASTICSEARCH_HOSTS.*/ELASTICSEARCH_URL=https:\/\/es01:9200/g' stack-compose.yml
-      else
-        sed -i '' -E 's/ELASTICSEARCH_HOST.*/ELASTICSEARCH_URL=https:\/\/es01:9200/g' stack-compose.yml
+    
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
+      echo "${stackcomposecurrent}" > stack-compose.yml
+    elif [ $(checkversion $VERSION) -lt $(checkversion "7.2.0") ] && [ $(checkversion $VERSION) -ge $(checkversion "7.0.0") ]; then
+      echo "${stackcompose71}" > stack-compose.yml
+    elif [ $(checkversion $VERSION) -lt $(checkversion "7.0.0") ]; then
+      echo "${stackcompose6}" > stack-compose.yml
+      if [ $(checkversion $VERSION) -le $(checkversion "6.5.0") ]; then
+        if [ "`uname -s`" != "Darwin" ]; then
+          sed -i 's/ELASTICSEARCH_HOSTS.*/ELASTICSEARCH_URL=https:\/\/es01:9200/g' stack-compose.yml
+        else
+          sed -i '' -E 's/ELASTICSEARCH_HOST.*/ELASTICSEARCH_URL=https:\/\/es01:9200/g' stack-compose.yml
+        fi
       fi
     fi
-  fi
-  echo "${green}[DEBUG]${reset} Created stack-compose.yml for ${VERSION}"
+    echo "${green}[DEBUG]${reset} Created stack-compose.yml for ${VERSION}"
 
-  # create certificates
-  echo "${green}[DEBUG]${reset} Create certificates"
-  docker-compose -f create-certs.yml run --rm create_certs
 
-  # start cluster
-  echo "${green}[DEBUG]${reset} Starting our deployment"
-  docker-compose -f stack-compose.yml up -d
+    # start cluster
+    echo "${green}[DEBUG]${reset} Starting our deployment"
+    docker-compose -f stack-compose.yml up -d
 
-  # wait for cluster to be healthy
-  checkhealth
+    # copy the certificate authority into the homedir for the project
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
+      docker exec es01 /bin/bash -c "cp /usr/share/elasticsearch/config/certificates/ca/ca.* /temp/"
+      mv ${WORKDIR}/temp/ca.* ${WORKDIR}/
+    else
+      cp ${WORKDIR}/certs/ca/ca.* ${WORKDIR}/
+    fi
+    
+    echo "${green}[DEBUG]${reset} Copied ca.crt into ${WORKDIR}"
+    
+    # wait for cluster to be healthy
+    checkhealth
 
-  # setup passwords
-  echo "${green}[DEBUG]${reset} Setting passwords and storing it in ${PWD}/notes"
-  if [ ${MAJOR} = "7" ]; then
-    if [ ${MINOR} -ge "6" ]; then
+    # setup passwords
+    echo "${green}[DEBUG]${reset} Setting passwords and storing it in ${PWD}/notes"
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.6.0") ]; then
       docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch \
 --url https://localhost:9200" | tee -a notes
-    else
+    elif [ $(checkversion $VERSION) -lt $(checkversion "7.6.0") ] && [ $(checkversion $VERSION) -ge $(checkversion "7.0.0") ]; then
       docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch \
 -Expack.security.http.ssl.certificate=certificates/es01/es01.crt \
 -Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt \
 -Expack.security.http.ssl.key=certificates/es01/es01.key \
 --url https://localhost:9200" | tee -a notes
-    fi
-  elif [ ${MAJOR} = "6" ]; then
-    docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch \
+    elif [ $(checkversion $VERSION) -lt $(checkversion "7.0.0") ]; then
+      docker exec es01 /bin/bash -c "bin/elasticsearch-setup-passwords auto --batch \
 -Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt \
 --url https://localhost:9200" | tee -a notes
-  fi
+    fi
+     
+    # grab the new elastic password
+    grabpasswd
 
+    # generate kibana encryption key
+    ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
 
-  # Add patch stuff here for specific versions and restart es* containers
-  ##
-  # if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
-  #
-  # docker restart es01 es02 es03
-  # fi
-
-
-  # grab the new elastic password
-  grabpasswd
-
-  # generate kibana encryption key
-  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
-
-  # create kibana.yml
-  if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
-    cat > kibana.yml<<EOF
+    # create kibana.yml
+    if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
+      cat > kibana.yml<<EOF
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
 EOF
-  else
-    cat > kibana.yml<<EOF
+    else
+      cat > kibana.yml<<EOF
 elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 xpack.security.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.reporting.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.encryptedSavedObjects.encryptionKey: "${ENCRYPTION_KEY}"
 EOF
-  fi
+    fi
 
-  echo "${green}[DEBUG]${reset} kibana.yml re-generated with new password and encryption keys"
+    echo "${green}[DEBUG]${reset} kibana.yml re-generated with new password and encryption keys"
 
-  # restart kibana
-  docker restart kibana >/dev/null 2>&1
-  echo "${green}[DEBUG]${reset} Restarted kibana to pick up the new elastic password"
+    # restart kibana
+    docker restart kibana >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Restarted kibana to pick up the new elastic password"
 
-  # copy the certificate authority into the homedir for the project
-   if [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ]; then
-    docker exec es01 /bin/bash -c "cp /usr/share/elasticsearch/config/certificates/ca/ca.* /temp/"
-    mv ${WORKDIR}/temp/ca.* ${WORKDIR}/
-  else
-    cp ${WORKDIR}/certs/ca/ca.* ${WORKDIR}/
-  fi
-  echo "${green}[DEBUG]${reset} Copied the certificate authority into ${WORKDIR}"
+  fi   
 
-  echo "${green}[DEBUG]${reset} Complete! - stack deployed. ${VERSION} "
-  echo ""
+  echo "${green}[DEBUG]${reset} Complete! - stack deployed. ${VERSION} elastic password: ${PASSWD}"
 
-# End of stack function
-}
+} # build stack end
+
 
 ###############################################################################################################
 
@@ -934,7 +1253,7 @@ monitor() {
   if [ $(checkversion $VERSION) -lt $(checkversion "6.5.0") ]; then
     echo "${red}[DEBUG]${reset} metricbeats collections started with 6.5+.  Please use legacy collections method"
     help
-    return
+    exit
   else
     echo "${green}********** Deploying metricbeat collections monitoring **********${reset}"
   fi
@@ -950,20 +1269,21 @@ monitor() {
   # check to see if monitor-compose.yml already exists.
   if [ -f "monitor-compose.yml" ]; then
     echo "${red}[DEBUG]${reset} monitor-compose.yml already exists. Exiting."
-    return
+    exit
   fi
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested monitoring for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
-    # grab the elastic password
-    grabpasswd
-
-    checkhealth
+  # grab the elastic password
+  grabpasswd
+    
+  # check health
+  checkhealth
 
   # add MB_CERTS_DIR & FB_CERTS to .env
   cat >> .env<<EOF
@@ -971,7 +1291,7 @@ MB_CERTS_DIR=/usr/share/metricbeat/certificates
 FB_CERTS_DIR=/usr/share/filebeat/certificates
 EOF
 
-  echo "${green}[DEBUG]${reset} Adding MB_CERTS_DIR & FB_CERTS_DIR to .env"
+  echo "${green}[DEBUG]${reset} Added MB_CERTS_DIR & FB_CERTS_DIR to .env"
 
   # pull images
   pullimage "docker.elastic.co/beats/metricbeat:${VERSION}"
@@ -988,7 +1308,136 @@ EOF
     sleep 2
   fi
 
-    common7="# common
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    
+    # set password for remote_monitoring_user
+    RMUPASSWD=`docker exec es01 bin/elasticsearch-reset-password -u remote_monitoring_user -a -s -b` 
+    echo "REMOTE_MONITORING_USER=${RMUPASSWD}" >> ${WORKDIR}/notes
+
+    # create metricbeat_monitoring role
+    curl -s -k -u "elastic:${PASSWD}" -XPUT "https://localhost:9200/_security/role/metricbeat_monitoring" -H 'Content-Type: application/json' -d'
+{
+  "cluster": [
+    "monitor"
+  ],
+  "indices": [
+    {
+      "names": [
+        ".monitoring-beats-*"
+      ],
+      "privileges": [
+        "create_index",
+        "create_doc"
+      ]
+    }
+  ]
+}' >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Created metricbeat_monitoring role"
+
+    # create metricbeat_monitoring_user
+    curl -s -k -u "elastic:${PASSWD}" -XPUT "https://localhost:9200/_security/user/metricbeat_monitoring_user" -H 'Content-Type: application/json' -d'
+{
+  "password": "test12345",
+  "roles": [
+    "metricbeat_monitoring",
+    "monitoring_user",
+    "kibana_admin",
+    "remote_monitoring_collector",
+    "remote_monitoring_agent"
+  ]
+}' >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Created metricbeat_monitoring_user user"
+
+    MMUPASSWD="test12345"
+    echo "METRICBEAT_MONITORING_USER=${MMUPASSWD}" >> ${WORKDIR}/notes
+
+    # create filebeat_writer role
+    curl -s -k -u "elastic:${PASSWD}" -XPUT "https://localhost:9200/_security/role/filebeat_writer" -H 'Content-Type: application/json' -d'
+{
+  "cluster": [
+    "monitor",
+    "read_pipeline",
+    "read_ilm",
+    "manage"
+  ],
+  "indices": [
+    {
+      "names": [
+        "filebeat-*"
+      ],
+      "privileges": [
+        "create_doc",
+        "view_index_metadata",
+        "create_index"
+      ]
+    },
+    {
+      "names": [
+        "filebeat-*",
+        ".ds-filebeat-*"
+      ],
+      "privileges": [
+        "manage",
+        "manage_follow_index",
+        "all"
+      ]
+    }
+  ]
+}' >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Created filebeat_writer role"
+
+    # create filebeat_monitoring_user
+    curl -s -k -u "elastic:${PASSWD}" -XPUT "https://localhost:9200/_security/user/filebeat_writer_user" -H 'Content-Type: application/json' -d'
+{
+  "password": "test12345",
+  "roles": [
+    "filebeat_writer"
+  ]
+}' >/dev/null 2>&1
+    echo "${green}[DEBUG]${reset} Created filebeat_writer_user user"
+
+    FWUPASSWD="test12345"
+    echo "FILEBEAT_WRITER_USER=${FWUPASSWD}" >> ${WORKDIR}/notes
+
+  fi 
+  
+  # metricbeat!!
+  # Create templates
+  common8="# common
+http.enabled: true
+http.port: 5066
+http.host: 0.0.0.0
+
+processors:
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+monitoring.enabled: false
+
+output.elasticsearch:
+  hosts: [\"https://es01:9200\", \"https://es02:9200\", \"https://es03:9200\"]
+  username: \"metricbeat_monitoring_user\"
+  password: "\"${MMUPASSWD}\""
+  ssl.enabled: true
+  ssl.verification_mode: full
+  ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
+
+metricbeat.modules:
+# Module: kibana
+- module: kibana
+  metricsets:
+    - stats
+  xpack.enabled: true
+  period: 10s
+  hosts: [\"https://kibana:5601\"]
+  username: \"remote_monitoring_user\"
+  password: "\"${RMUPASSWD}\""
+  ssl.enabled: true
+  ssl.verification_mode: full
+  ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
+  "
+
+  common7="# common
 http.enabled: true
 http.port: 5066
 http.host: 0.0.0.0
@@ -1021,6 +1470,7 @@ metricbeat.modules:
   ssl.verification_mode: full
   ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
   "
+
   common6="# common
 http.enabled: true
 http.port: 5066
@@ -1062,6 +1512,19 @@ metricbeat.modules:
   period: 10s
   hosts: [\"http://metricbeat:5066\", \"http://filebeat:5066\"]
   xpack.enabled: true
+  ssl.enabled: true
+  ssl.verification_mode: full
+  ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
+
+  "
+  
+  es8="# Module: elasticsearch
+- module: elasticsearch
+  xpack.enabled: true
+  period: 10s
+  hosts: [\"https://es01:9200\", \"https://es02:9200\", \"https://es03:9200\"]
+  username: \"remote_monitoring_user\"
+  password: "\"${RMUPASSWD}\""
   ssl.enabled: true
   ssl.verification_mode: full
   ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
@@ -1124,39 +1587,70 @@ metricbeat.modules:
   ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
   "
 
-  if [ ${MAJOR} = "7" ]; then
+  # create metricbeat.yml
+  # common section
+  if [ ${MAJOR} = "8" ]; then
+    echo "${common8}" > metricbeat.yml
+  elif [ ${MAJOR} = "7" ]; then
     echo "${common7}" > metricbeat.yml
-    if [ ${MINOR} -ge "3" ]; then
-      echo "${beats}" >> metricbeat.yml
-    fi
-    if [ ${MINOR} -ge "9" ]; then
-      echo "${escurrent}" >> metricbeat.yml
-    elif [ ${MINOR} -ge "5" ]; then
-      echo "${es78}" >> metricbeat.yml
-    elif [ ${MINOR} -ge "2" ]; then
-      echo "${es74}" >> metricbeat.yml
-    else
-      echo "${es74}" >> metricbeat.yml
-      if [ "`uname -s`" != "Darwin" ]; then
-        sed -i 's/full/none/g' metricbeat.yml
-      else
-        sed -i '' -E 's/full/none/g' metricbeat.yml
-      fi
-    fi
   elif [ ${MAJOR} = "6" ]; then
     echo "${common6}" > metricbeat.yml
+  fi
+
+  # beats section
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.3.0") ]; then
+    echo "${beats}" >> metricbeat.yml
+  fi
+
+  # es section
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    echo "${es8}" >> metricbeat.yml
+  elif [ $(checkversion $VERSION) -ge $(checkversion "7.9.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
+    echo "${escurrent}" >> metricbeat.yml
+  elif [ $(checkversion $VERSION) -ge $(checkversion "7.5.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "7.9.0") ]; then
+    echo "${es78}" >> metricbeat.yml
+  elif [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "7.5.0") ]; then
+    echo "${es74}" >> metricbeat.yml
+  else
     echo "${es74}" >> metricbeat.yml
     if [ "`uname -s`" != "Darwin" ]; then
       sed -i 's/full/none/g' metricbeat.yml
     else
-        sed -i '' -E 's/full/none/g' metricbeat.yml
+      sed -i '' -E 's/full/none/g' metricbeat.yml
     fi
   fi
+
   chmod go-w metricbeat.yml >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Created metricbeat.yml"
 
-  cat > filebeat.yml<<EOF
-#
+
+  # filebeatbeat!!
+  
+fb8="#
+http.enabled: true
+http.port: 5066
+http.host: 0.0.0.0
+monitoring.enabled: false
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+
+processors:
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: [\"https://es01:9200\", \"https://es02:9200\", \"https://es03:9200\"]
+  username: \"filebeat_writer_user\"
+  password: \"${FWUPASSWD}\"
+  ssl.enabled: true
+  ssl.verification_mode: full
+  ssl.certificate_authorities: [\"/usr/share/filebeat/certificates/ca/ca.crt\"]
+"
+
+fb7="#
 http.enabled: true
 http.port: 5066
 http.host: 0.0.0.0
@@ -1176,32 +1670,34 @@ processors:
   - add_docker_metadata: ~
 
 output.elasticsearch:
-  hosts: ["https://es01:9200", "https://es02:9200", "https://es03:9200"]
-  username: "elastic"
-  password: "${PASSWD}"
+  hosts: [\"https://es01:9200\", \"https://es02:9200\", \"https://es03:9200\"]
+  username: \"elastic\"
+  password: \"${PASSWD}\"
   ssl.enabled: true
   ssl.verification_mode: full
-  ssl.certificate_authorities: ["/usr/share/filebeat/certificates/ca/ca.crt"]
-EOF
-
-  if [ ${MAJOR} = "7" ]; then
-    if [ ${MINOR} -le "1" ]; then
-      if [ "`uname -s`" != "Darwin" ]; then
-        sed -i 's/full/none/g' filebeat.yml
-      else
-        sed -i '' -E 's/full/none/g' filebeat.yml
-      fi
-    fi
-  elif [ ${MAJOR} = "6" ]; then
+  ssl.certificate_authorities: [\"/usr/share/filebeat/certificates/ca/ca.crt\"]
+"
+  
+  # create filebeat.yml
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    echo "${fb8}" > filebeat.yml
+  elif [ $(checkversion $VERSION) -ge $(checkversion "7.2.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
+    echo "${fb7}" > filebeat.yml
+  else
+    echo "${fb7}" > filebeat.yml
     if [ "`uname -s`" != "Darwin" ]; then
       sed -i 's/full/none/g' filebeat.yml
     else
       sed -i '' -E 's/full/none/g' filebeat.yml
     fi
   fi
+
   echo "${green}[DEBUG]${reset} Created filebeat.yml"
 
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "7" ]; then
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
+    STRINGMB="command: metricbeat -environment container --strict.perms=false"
+    STRINGFB="command: filebeat -environment container --strict.perms=false"
+  elif [ $(checkversion $VERSION) -ge $(checkversion "7.7.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
     STRINGMB="command: metricbeat -environment container --strict.perms=false"
     STRINGFB="command: filebeat -environment container --strict.perms=false"
   else
@@ -1218,6 +1714,8 @@ services:
     user: root
     ${STRINGMB}
     image: docker.elastic.co/beats/metricbeat:${VERSION}
+    labels:
+      co.elastic.logs/module: beats
     volumes: ['./metricbeat.yml:/usr/share/metricbeat/metricbeat.yml', 'certs:\$MB_CERTS_DIR', './temp:/temp', '/var/run/docker.sock:/var/run/docker.sock:ro']
     restart: on-failure
   filebeat:
@@ -1225,15 +1723,15 @@ services:
     user: root
     ${STRINGFB}
     image: docker.elastic.co/beats/filebeat:${VERSION}
+    labels:
+      co.elastic.logs/module: beats
     volumes: ['./filebeat.yml:/usr/share/filebeat/filebeat.yml', 'certs:\$FB_CERTS_DIR', './temp:/temp', '/var/lib/docker/containers:/var/lib/docker/containers:ro', '/var/run/docker.sock:/var/run/docker.sock:ro']
     restart: on-failure
 
 volumes: {"certs"}
 EOF
-
-  if [ ${MAJOR} = "7" ] && [ ${MINOR} -ge "2" ]; then
-    true
-  else
+  
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.2.0") ]; then
     if [ "`uname -s`" != "Darwin" ]; then
       sed -i 's/certs/\.\/certs/g' monitor-compose.yml
       sed -i 's/^volumes.*//g' monitor-compose.yml
@@ -1244,7 +1742,7 @@ EOF
   fi
 
   echo "${green}[DEBUG]${reset} Created monitor-compose.yml"
-
+  
   # add setting for xpack.monitoring.collection.enabled
   checkhealth
 
@@ -1268,12 +1766,34 @@ EOF
     echo "${green}[DEBUG]${reset} Found APM-SERVER adding to beats monitoring"
   fi
 
+  # TODO: need section for add monitoring for enterprise search if metricbeat.yml exists
+  ##
+  ##
+  # add monitoring if monitoring is enabled and if enterprise search is 7.16.0+
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+    if [ -f "${WORKDIR}/entsearch-compose.yml" ]; then
+      echo "${green}[DEBUG]${reset} enterprise search found and the stack is 7.16.0+ - enabling enterprisesearch monitoring"
+      cat >> ${WORKDIR}/metricbeat.yml<<EOF
+metricbeat.modules:
+- module: enterprisesearch
+  metricsets: ["health", "stats"]
+  enabled: true
+  period: 10s
+  hosts: ["http://entsearch:3002"]
+  username: "elastic"
+  password: "${PASSWD}"
+EOF
+
+    fi
+  fi
+
   # start service
   echo "${green}[DEBUG]${reset} Starting monitoring....."
   docker-compose -f monitor-compose.yml up -d >/dev/null 2>&1
 
-# End of monitor function
-}
+
+} # End of monitor function
+
 
 ###############################################################################################################
 
@@ -1291,14 +1811,14 @@ snapshot() {
   # check to see if snapshot-compose.yml already exists.
   if [ -f "snapshot-compose.yml" ]; then
     echo "${red}[DEBUG]${reset} snapshot-compose.yml already exists. Exiting."
-    return
+    exit
   fi
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
   # grab the elastic password
@@ -1375,7 +1895,7 @@ EOF
       echo "${green}[DEBUG]${reset} repository-s3 installed to ${instance}"
     fi
     sleep 3
-    if [ ${MAJOR} = "7" ]; then
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.0.0") ]; then
       docker exec -i ${instance} bin/elasticsearch-keystore add -xf s3.client.minio01.access_key <<EOF
 minio
 EOF
@@ -1396,7 +1916,7 @@ EOF
   checkhealth
 
   # add repsitory
-  if [ ${MAJOR} = "7" ]; then
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.0.0") ]; then
     curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_snapshot/minio01" -H 'Content-Type: application/json' -d'
 {
   "type" : "s3",
@@ -1410,15 +1930,15 @@ EOF
 }' >/dev/null 2>&1
 
     echo "${green}[DEBUG]${reset} Added minio01 snapshot repository"
-
-    if [ ${MINOR} -ge "4" ]; then
+    
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.4.0") ]; then
       curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_slm/policy/minio-snapshot-policy" -H 'Content-Type: application/json' -d'{  "schedule": "0 */30 * * * ?",   "name": "<minio-snapshot-{now/d}>",   "repository": "minio01",   "config": {     "partial": true  },  "retention": {     "expire_after": "5d",     "min_count": 1,     "max_count": 20   }}' >/dev/null 2>&1
       echo "${green}[DEBUG]${reset} Added minio-snapshot-policy"
       sleep 3
       curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_slm/policy/minio-snapshot-policy/_execute" >/dev/null 2>&1
       echo "${green}[DEBUG]${reset} Executed minio-snapshot-policy"
     fi
-  elif [ ${MAJOR} = "6" ]; then
+  elif [ $(checkversion $VERSION) -lt $(checkversion "7.0.0") ]; then
     curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_snapshot/minio01" -H 'Content-Type: application/json' -d'
 {
   "type": "s3",
@@ -1434,8 +1954,465 @@ EOF
     echo "${green}[DEBUG]${reset} Added minio01 snapshot repository"
   fi
 
-  # End of snapshot function
+}  # End of snapshot function
+
+
+###############################################################################################################
+
+fleet() {
+  # check to make sure that ES is 7.7 or greater
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.10.0") ]; then
+    echo "${red}[DEBUG]${reset} FLEET started with 7.10+."
+    help
+    return
+  fi
+
+  # check to see if ${WORKDIR} exits
+  if [ ! -d ${WORKDIR} ]; then
+    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
+    stack ${VERSION}
+    echo "${green}********** Deploying FLEET **********${reset}"
+  else
+    cd ${WORKDIR}
+    echo "${green}********** Deploying FLEET **********${reset}"
+  fi
+
+  # check to see if fleet-compose.yml already exists.
+  if [ -f "fleet-compose.yml" ]; then
+    echo "${red}[DEBUG]${reset} fleet-compose.yml already exists. Exiting."
+    return
+  fi
+
+  # check to see if version match
+  OLDVERSION="`cat VERSION`"
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
+  fi
+
+  # grab the elastic password
+  grabpasswd
+
+  # check health before continuing
+  checkhealth
+
+  # pull image
+  pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
+
+  # get IP
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    IP=`ip route get 1 | awk '{print $NF;exit}'`
+  elif [[ "$OSTYPE" == "darwin"* ]]; then
+    INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'`
+    IP=`ifconfig ${INTERFACE} | grep inet | awk '{ print $2 }'`
+  else
+    IP="NEED2UPDATE"
+  fi
+
+  # add to .env
+  cat >> .env<<EOF
+FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
+EOF
+  # add to elasticsearch.yml if it doesnt exist
+  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
+    cat >> elasticsearch.yml<<EOF
+xpack.security.authc.api_key.enabled: true
+EOF
+    # restart elasticsearch
+    for instance in es01 es02 es03
+    do
+      docker restart ${instance}>/dev/null 2>&1
+      sleep 10
+      echo "${green}[DEBUG]${reset} Restarting ${instance} for FLEET"
+    done
+  fi
+
+  checkhealth
+
+  # bootstrap fleet on ES & KB
+  echo "${green}[DEBUG]${reset} Setting up kibana for fleet"
+  curl -k -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' >/dev/null 2>&1
+  sleep 70 & # no healthchecks on fleet so just going to sleep for 60
+  while kill -0 $! >/dev/null 2>&1
+  do
+    echo -n "."
+    sleep 2
+  done
+  echo ""
+  
+  # create fleet.yml
+  if [ ! -f ${WORKDIR}/fleet.yml ]; then
+    # touch ${WORKDIR}/fleet.yml
+    cat > ${WORKDIR}/fleet.yml <<EOF
+agent.monitoring:
+enabled: true 
+  logs: true 
+  metrics: true 
+  http:
+      enabled: true 
+      host: 0.0.0.0 
+      port: 6791 
+EOF
+  fi
+
+  if [ $(checkversion $VERSION) -lt $(checkversion "8.1.0") ]; then
+    # Create service token
+    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
+    # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
+    SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+
+    # generate fleet-compose.yml
+    cat > fleet-compose.yml<<EOF
+version: '2.2'
+
+services:
+  fleet:
+    container_name: fleet
+    user: root
+    image: docker.elastic.co/beats/elastic-agent:${VERSION}
+    environment:
+      - FLEET_SERVER_ENABLE=true
+      - FLEET_URL=https://fleet:8220
+      - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
+      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certificates/fleet/fleet.crt
+      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certificates/fleet/fleet.key
+      - FLEET_SERVER_SERVICE_TOKEN=${SERVICETOKEN}
+      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
+    ports:
+      - 8220:8220
+      - 6791:6791
+    restart: on-failure
+    volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
+
+volumes: {"certs"}
+EOF
+
+    echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+
+    # Setting Fleet URL
+    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+
+    sleep 5
+    
+    ## ssl ca
+    if [ -f ${WORKDIR}/ca.temp ]; then
+      rm -rf ${WORKDIR}/ca.temp
+    fi
+    while read line
+    do
+      echo "    ${line}" >> ${WORKDIR}/ca.temp
+    done < ${WORKDIR}/ca.crt
+    truncate -s -1 ${WORKDIR}/ca.temp
+    CA=$(jq -R -s '.' < ${WORKDIR}/ca.temp | tr -d '"')
+    rm -rf ${WORKDIR}/ca.temp
+
+    if [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
+      generate_post_data()
+        {
+          cat <<EOF
+{
+  "hosts":["https://${IP}:9200"],
+  "config_yaml":"ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
 }
+EOF
+        }
+
+      curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+      --header 'kbn-xsrf: true' \
+      --header 'Content-Type: application/json' \
+      -d "$(generate_post_data)" >/dev/null 2>&1
+
+      sleep 5
+    else
+
+      generate_post_data()
+      {
+        cat <<EOF
+{
+  "name": "default",
+  "type": "elasticsearch",
+  "hosts": ["https://${IP}:9200"],
+  "is_default": true,
+  "is_default_monitoring": true,
+  "ca_trusted_fingerprint": "${FINGERPRINT}",
+  "config_yaml": "ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
+}
+EOF
+      }
+
+      curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+      --header 'kbn-xsrf: true' \
+      --header 'Content-Type: application/json' \
+      -d "$(generate_post_data)" >/dev/null 2>&1
+
+      sleep 5
+
+    fi
+
+  elif [ $(checkversion $VERSION) -ge $(checkversion "8.1.0") ]; then
+  
+    # Create Fleet server policy
+    echo "${green}[DEBUG]${reset} Creating Fleet Server Policy"
+    curl -k -u "elastic:${PASSWD}" "https://localhost:5601/api/fleet/agent_policies?sys_monitoring=true" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}' >/dev/null 2>&1
+
+    sleep 5
+    
+    # Setting Fleet URL
+    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+
+    sleep 5
+
+    # setting Elasticsearch URL and SSL certificate and fingerprint
+    echo "${green}[DEBUG]${reset} Setting Elasticsearch URL & Fingerprint & SSL CA"
+    
+    ## fingerprint
+    FINGERPRINT=`openssl x509 -fingerprint -sha256 -noout -in ${WORKDIR}/ca.crt | awk -F"=" {' print $2 '} | sed s/://g`
+    
+    ## ssl ca
+    if [ -f ${WORKDIR}/ca.temp ]; then
+      rm -rf ${WORKDIR}/ca.temp
+    fi
+    while read line
+    do
+      echo "    ${line}" >> ${WORKDIR}/ca.temp
+    done < ${WORKDIR}/ca.crt
+    truncate -s -1 ${WORKDIR}/ca.temp
+    CA=$(jq -R -s '.' < ${WORKDIR}/ca.temp | tr -d '"')
+    rm -rf ${WORKDIR}/ca.temp
+
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "name": "default",
+  "type": "elasticsearch",
+  "hosts": ["https://${IP}:9200"],
+  "is_default": true,
+  "is_default_monitoring": true,
+  "ca_trusted_fingerprint": "${FINGERPRINT}",
+  "config_yaml": "ssl:\n  verification_mode: none\n  certificate_authorities:\n  - |\n${CA}"
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/outputs/fleet-default-output" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)" >/dev/null 2>&1
+
+    sleep 5
+
+    # Create service token
+    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
+    SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+
+    # generate fleet-compose.yml
+    cat > fleet-compose.yml<<EOF
+version: '2.2'
+
+services:
+  fleet:
+    container_name: fleet
+    user: root
+    image: docker.elastic.co/beats/elastic-agent:${VERSION}
+    environment:
+      - FLEET_SERVER_ENABLE=true
+      - FLEET_URL=https://fleet:8220
+      - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
+      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
+      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certificates/fleet/fleet.crt
+      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certificates/fleet/fleet.key
+      - FLEET_SERVER_SERVICE_TOKEN=${SERVICETOKEN}
+      - FLEET_SERVER_POLICY=fleet-server-policy
+      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
+    ports:
+      - 8220:8220
+      - 6791:6791
+    restart: on-failure
+    volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
+
+volumes: {"certs"}
+EOF
+
+    echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
+
+  fi
+
+  docker-compose -f fleet-compose.yml up -d >/dev/null 2>&1
+  echo "${green}[DEBUG]${reset} Started FLEET SERVER. - Please give it about a minute for things to settle before you go into the FLEET app."
+
+} # End of FLEET
+
+
+###############################################################################################################
+
+entsearch() {
+  # check to make sure that ES is 7.7 or greater
+  if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
+    echo "${red}[DEBUG]${reset} Enterprise Search started with 7.7+."
+    help
+    return
+  fi
+
+  # check to see if ${WORKDIR} exits
+  if [ ! -d ${WORKDIR} ]; then
+    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
+    stack ${VERSION}
+    echo "${green}********** Deploying Enterprise Search **********${reset}"
+  else
+    cd ${WORKDIR}
+    echo "${green}********** Deploying Enterprise Search **********${reset}"
+  fi
+
+  # check to see if entsearch-compose.yml already exists.
+  if [ -f "entsearch-compose.yml" ]; then
+    echo "${red}[DEBUG]${reset} entsearch-compose.yml already exists. Exiting."
+    return
+  fi
+
+  # check to see if version match
+  OLDVERSION="`cat VERSION`"
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
+  fi
+
+  # grab the elastic password
+  grabpasswd
+
+  # check health before continuing
+  checkhealth
+
+  # pull image
+  pullimage "docker.elastic.co/enterprise-search/enterprise-search:${VERSION}"
+
+  # generate kibana encryption key
+  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
+
+  # add to .env
+  cat >> .env<<EOF
+ENTSEARCH_CERTS_DIR=/usr/share/enterprise-search/config/certificates
+EOF
+  echo "${green}[DEBUG]${reset} Added ENTSEARCH_CERTS_DIR to .env"
+
+  # add to elasticsearch.yml
+  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
+    cat >> elasticsearch.yml<<EOF
+xpack.security.authc.api_key.enabled: true
+EOF
+  echo "${green}[DEBUG]${reset} Added xpack.security.authc.api_key.enabled to elasticsearch.yml"
+  fi
+
+  # adding action.auto_create_index
+  cat >> elasticsearch.yml<<EOF
+action.auto_create_index: ".ent-search-*-logs-*,-.ent-search-*,-test-.ent-search-*,+*"
+EOF
+  echo "${green}[DEBUG]${reset} Added action.auto_create_index to elasticsearch.yml"
+
+  # add to kibana.yml
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+    cat >> kibana.yml<<EOF
+enterpriseSearch.host: "http://entsearch:3002"
+EOF
+  echo "${green}[DEBUG]${reset} Added enterpriseSearch.host to kibana.yml"
+  fi
+
+  # restart elasticsearch
+  for instance in es01 es02 es03 kibana
+  do
+    docker restart ${instance}>/dev/null 2>&1
+    sleep 10
+    echo "${green}[DEBUG]${reset} Restarting ${instance} for Enterprise Search"
+  done
+
+  checkhealth
+
+  # create enterprise-search.yml
+  cat > enterprise-search.yml<<EOF
+elasticsearch.host: https://es01:9200
+elasticsearch.ssl.enabled: true
+elasticsearch.ssl.certificate_authority: /usr/share/enterprise-search/config/certificates/ca/ca.crt
+
+elasticsearch.username: elastic
+elasticsearch.password: ${PASSWD}
+
+# ent_search.auth.default.source: standard
+ent_search.ssl.enabled: false
+
+ent_search.listen_host: 0.0.0.0
+ent_search.listen_port: 3002
+ent_search.external_url: http://localhost:3002
+
+filebeat_log_directory: /var/log/enterprise-search
+log_directory: /var/log/enterprise-search
+secret_management.encryption_keys: [${ENCRYPTION_KEY}]
+secret_session_key: "${ENCRYPTION_KEY}"
+EOF
+
+  echo "${green}[DEBUG]${reset} Created enterprise-search.yml"
+
+  # generate entsearch-compose.yml
+  cat > entsearch-compose.yml<<EOF
+version: '2.2'
+
+services:
+  entsearch:
+    container_name: entsearch
+    image: docker.elastic.co/enterprise-search/enterprise-search:${VERSION}
+    environment:
+      - "ENT_SEARCH_DEFAULT_PASSWORD=${PASSWD}"
+      - "allow_es_settings_modification=true"
+      - "elasticsearch.startup_retry.interval=15"
+    volumes: ['./enterprise-search.yml:/usr/share/enterprise-search/config/enterprise-search.yml', 'certs:\$ENTSEARCH_CERTS_DIR', './temp:/temp']
+    ports:
+      - 3002:3002
+    restart: on-failure
+
+volumes: {"certs"}
+EOF
+
+  echo "${green}[DEBUG]${reset} Created entsearch-compose.yml"
+
+  docker-compose -f entsearch-compose.yml up -d >/dev/null 2>&1
+  echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a ${red}WHILE!!${reset} to finish install. Please run docker logs -f entsearch to view progress"
+  echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login or kibana if newer versions"
+  # echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
+
+
+  # add monitoring if monitoring is enabled and if enterprise search is 7.16.0+
+  if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+    if [ -f "${WORKDIR}/monitor-compose.yml" ]; then
+      echo "${green}[DEBUG]${reset} monitoring found and the stack is 7.16.0+ - enabling enterprisesearch monitoring"
+      cat >> ${WORKDIR}/metricbeat.yml<<EOF
+metricbeat.modules:
+- module: enterprisesearch
+  metricsets: ["health", "stats"]
+  enabled: true
+  period: 10s
+  hosts: ["http://entsearch:3002"]
+  username: "elastic"
+  password: "${PASSWD}"
+EOF
+      docker restart metricbeat >/dev/null 2>&1
+      echo "${green}[DEBUG]${reset} metricbeat container restarted"
+    fi
+  fi
+
+} # End of Enterprise Search
 
 ###############################################################################################################
 
@@ -1462,9 +2439,9 @@ apm() {
 
   # check to see if version match
   OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
+  if [ $(checkversion $VERSION) -gt $(checkversion $OLDVERSION) ]; then
+    echo "${red}[DEBUG]${reset} Version needs to be equal or lower than stack version ${OLDVERSION}"
+    exit
   fi
 
   # grab the elastic password
@@ -1579,259 +2556,7 @@ services:
     echo "${green}[DEBUG]${reset} added apm monitoring and restarted metricbeat"
   fi
 
-  # End of apm function
-}
-
-###############################################################################################################
-
-entsearch() {
-  # check to make sure that ES is 7.7 or greater
-  if [ $(checkversion $VERSION) -lt $(checkversion "7.7.0") ]; then
-    echo "${red}[DEBUG]${reset} Enterprise Search started with 7.7+."
-    help
-    return
-  fi
-
-  # check to see if ${WORKDIR} exits
-  if [ ! -d ${WORKDIR} ]; then
-    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
-    stack ${VERSION}
-    echo "${green}********** Deploying Enterprise Search **********${reset}"
-  else
-    cd ${WORKDIR}
-    echo "${green}********** Deploying Enterprise Search **********${reset}"
-  fi
-
-  # check to see if entsearch-compose.yml already exists.
-  if [ -f "entsearch-compose.yml" ]; then
-    echo "${red}[DEBUG]${reset} entsearch-compose.yml already exists. Exiting."
-    return
-  fi
-
-  # check to see if version match
-  OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
-  fi
-
-  # grab the elastic password
-  grabpasswd
-
-  # check health before continuing
-  checkhealth
-
-  # pull image
-  pullimage "docker.elastic.co/enterprise-search/enterprise-search:${VERSION}"
-
-  # generate kibana encryption key
-  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
-
-  # add to .env
-  cat >> .env<<EOF
-ENTSEARCH_CERTS_DIR=/usr/share/enterprise-search/config/certificates
-EOF
-  # add to elasticsearch.yml
-  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
-    cat >> elasticsearch.yml<<EOF
-xpack.security.authc.api_key.enabled: true
-EOF
-  fi
-  cat >> elasticsearch.yml<<EOF
-action.auto_create_index: ".ent-search-*-logs-*,-.ent-search-*,-test-.ent-search-*,+*"
-EOF
-
-  # add to kibana.yml
-  if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
-    cat >> kibana.yml<<EOF
-enterpriseSearch.host: "http://entsearch:3002"
-EOF
-  fi
-
-  # restart elasticsearch
-  for instance in es01 es02 es03 kibana
-  do
-    docker restart ${instance}>/dev/null 2>&1
-    sleep 10
-    echo "${green}[DEBUG]${reset} Restarting ${instance} for Enterprise Search"
-  done
-
-  checkhealth
-
-  # create enterprise-search.yml
-  cat > enterprise-search.yml<<EOF
-elasticsearch.host: https://es01:9200
-elasticsearch.ssl.enabled: true
-elasticsearch.ssl.certificate_authority: /usr/share/enterprise-search/config/certificates/ca/ca.crt
-
-elasticsearch.username: elastic
-elasticsearch.password: ${PASSWD}
-
-ent_search.auth.default.source: standard
-ent_search.ssl.enabled: false
-
-ent_search.listen_host: 0.0.0.0
-ent_search.listen_port: 3002
-ent_search.external_url: http://localhost:3002
-
-filebeat_log_directory: /var/log/enterprise-search
-log_directory: /var/log/enterprise-search
-secret_management.encryption_keys: [${ENCRYPTION_KEY}]
-secret_session_key: "${ENCRYPTION_KEY}"
-EOF
-
-  echo "${green}[DEBUG]${reset} Created enterprise-search.yml"
-
-  # generate entsearch-compose.yml
-  cat > entsearch-compose.yml<<EOF
-version: '2.2'
-
-services:
-  entsearch:
-    container_name: entsearch
-    image: docker.elastic.co/enterprise-search/enterprise-search:${VERSION}
-    environment:
-      - "ENT_SEARCH_DEFAULT_PASSWORD=${PASSWD}"
-      - "allow_es_settings_modification=true"
-      - "elasticsearch.startup_retry.interval=15"
-    volumes: ['./enterprise-search.yml:/usr/share/enterprise-search/config/enterprise-search.yml', 'certs:\$ENTSEARCH_CERTS_DIR', './temp:/temp']
-    ports:
-      - 3002:3002
-    restart: on-failure
-
-volumes: {"certs"}
-EOF
-
-  echo "${green}[DEBUG]${reset} Created entsearch-compose.yml"
-
-  docker-compose -f entsearch-compose.yml up -d >/dev/null 2>&1
-  echo "${green}[DEBUG]${reset} Started Enterprise Search.  It takes a ${red}WHILE!!${reset} to finish install. Please run docker logs -f entsearch to view progress"
-  echo "${green}[DEBUG]${reset} For now please browse to http://localhost:3002 and use enterprise_search and ${PASSWD} to login or kibana if newer versions"
-  # echo "${green}[DEBUG]${reset} If you are redirected to http://localhost:3002 then edit elasticstack/enterprise-search.yml and change ent_search.external_url: http://localhost:3002 to localhost to your IP"
-
-  # End of Enterprise Search
-}
-
-###############################################################################################################
-
-fleet() {
-  # check to make sure that ES is 7.7 or greater
-  if [ $(checkversion $VERSION) -lt $(checkversion "7.13.0") ]; then
-    echo "${red}[DEBUG]${reset} FLEET started with 7.14+."
-    help
-    return
-  fi
-
-  # check to see if ${WORKDIR} exits
-  if [ ! -d ${WORKDIR} ]; then
-    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
-    stack ${VERSION}
-    echo "${green}********** Deploying FLEET **********${reset}"
-  else
-    cd ${WORKDIR}
-    echo "${green}********** Deploying FLEET **********${reset}"
-  fi
-
-  # check to see if fleet-compose.yml already exists.
-  if [ -f "fleet-compose.yml" ]; then
-    echo "${red}[DEBUG]${reset} fleet-compose.yml already exists. Exiting."
-    return
-  fi
-
-  # check to see if version match
-  OLDVERSION="`cat VERSION`"
-  if [ "${OLDVERSION}" != "${VERSION}" ]; then
-    echo "${red}[DEBUG]${reset} Version installed is ${OLDVERSION} however you requested snapshot for ${VERSION}"
-    return
-  fi
-
-  # grab the elastic password
-  grabpasswd
-
-  # check health before continuing
-  checkhealth
-
-  # pull image
-  pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
-
-  # generate kibana encryption key
-  ENCRYPTION_KEY=`openssl rand -base64 40 | tr -d "=+/" | cut -c1-32`
-
-  # add to .env
-  cat >> .env<<EOF
-FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
-EOF
-  # add to elasticsearch.yml if it doesnt exist
-  if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
-    cat >> elasticsearch.yml<<EOF
-xpack.security.authc.api_key.enabled: true
-EOF
-    # restart elasticsearch
-    for instance in es01 es02 es03
-    do
-      docker restart ${instance}>/dev/null 2>&1
-      sleep 10
-      echo "${green}[DEBUG]${reset} Restarting ${instance} for FLEET"
-    done
-  fi
-
-  checkhealth
-
-  # bootstrap fleet on ES & KB
-  echo "${green}[DEBUG]${reset} Setting up kibana for fleet"
-  curl -k -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' >/dev/null 2>&1
-  sleep 60 & # no healthchecks on fleet so just going to sleep for 60
-  while kill -0 $! >/dev/null 2>&1
-  do
-    echo -n "."
-    sleep 2
-  done
-  echo ""
-  
-  # Create service token
-  echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
-  # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
-  SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
-
-  # create fleet.yml
-  if [ ! -f ${WORKDIR}/fleet.yml ]; then
-    touch ${WORKDIR}/fleet.yml
-  fi
-
-  # generate fleet-compose.yml
-  cat > fleet-compose.yml<<EOF
-version: '2.2'
-
-services:
-  fleet:
-    container_name: fleet
-    user: root
-    image: docker.elastic.co/beats/elastic-agent:${VERSION}
-    environment:
-      - FLEET_SERVER_ENABLE=true
-      - FLEET_URL=https://fleet:8220
-      - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
-      - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
-      - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
-      - FLEET_SERVER_CERT=/usr/share/elastic-agent/certificates/fleet/fleet.crt
-      - FLEET_SERVER_CERT_KEY=/usr/share/elastic-agent/certificates/fleet/fleet.key
-      - FLEET_SERVER_SERVICE_TOKEN=${SERVICETOKEN}
-      - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
-    ports:
-      - 8220:8220
-    restart: on-failure
-    volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
-
-volumes: {"certs"}
-EOF
-
-  echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
-
-  docker-compose -f fleet-compose.yml up -d >/dev/null 2>&1
-  echo "${green}[DEBUG]${reset} Started FLEET SERVER. - Please give it about a minute for things to settle before you go into the FLEET app."
-
-  # End of FLEET
-}
+} # End of apm function
 
 ###############################################################################################################
 
@@ -1854,8 +2579,12 @@ case ${1} in
   snapshot)
     snapshot ${2}
     ;;
-  apm)
-    apm ${2}
+  fleet)
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
+      fleet ${2}
+    else
+      help
+    fi
     ;;
   entsearch)
     if [ $(checkversion $VERSION) -ge $(checkversion "7.7.0") ]; then
@@ -1864,58 +2593,13 @@ case ${1} in
       help
     fi
     ;;
-  fleet)
-    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
-      fleet ${2}
-    else
+  apm)
+    if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+      echo "${green}[DEBUG]${reset} APM server is now part of Fleet Integrations.  Please use fleet"
+      echo ""
       help
-    fi
-    ;;
-  full)
-    if [ $(checkversion $VERSION) -ge $(checkversion "6.5.0") ]; then
-      stack ${2}
-      monitor ${2}
-      snapshot ${2}
     else
-      help
-    fi
-    ;;
-  fullapm)
-    stack ${2}
-    monitor ${2}
-    snapshot ${2}
-    apm ${2}
-    ;;
-  fullentsearch)
-    if [ $(checkversion $VERSION) -ge $(checkversion "7.7.0") ]; then
-      stack ${2}
-      monitor ${2}
-      snapshot ${2}
-      entsearch ${2}
-    else
-      help
-    fi
-    ;;
-  fullfleet)
-    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
-      stack ${2}
-      monitor ${2}
-      snapshot ${2}
-      fleet ${2}
-    else
-      help
-    fi
-    ;;
-  all)
-    if [ $(checkversion $VERSION) -ge $(checkversion "7.10.0") ]; then
-      stack ${2}
-      monitor ${2}
-      snapshot ${2}
       apm ${2}
-      entsearch ${2}
-      fleet ${2}
-    else
-      help
     fi
     ;;
   cleanup)
@@ -1923,7 +2607,9 @@ case ${1} in
     ;;
   *)
     help
+    exit
     ;;
 esac
 
-exit # have a great day!
+
+

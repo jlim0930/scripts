@@ -179,6 +179,23 @@ checkhealth() {
   echo "${green}[DEBUG]${reset} elasticsearch health is ${green}GREEN${reset} moving forward."
 } # end of checkhealth function
 
+# check fleet status
+checkfleet() {
+  while true
+    do
+      if [ `curl -f -s -k https://localhost:8220/api/status | grep -c HEALTHY` = 1 ]; then
+        sleep 2
+        break
+      else
+        echo "${red}[DEBUG]${reset} fleet is unhealthy.  Checking again in 2 seconds.. if fleet does not become healthy in ~ 30 seconds something is wrong ctrl-c please. First startup takes some time"
+        sleep 2
+      fi
+    done
+
+    echo "${green}[DEBUG]${reset} fleet is ${green}HEALTHY${reset} moving foward."
+
+} # end of checkfleet
+
 # grab the elastic password
 grabpasswd() {
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
@@ -228,7 +245,6 @@ cleanup() {
 
 } # end of cleanup function
 
-
 ###############################################################################################################
 # build stack
 
@@ -268,6 +284,7 @@ stack() {
     # create elasticsearch.yml
     cat > elasticsearch.yml<<EOF
 network.host: 0.0.0.0
+xpack.security.authc.api_key.enabled: true
 EOF
     chown 1000 elasticsearch.yml >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} elasticsearch.yml created"
@@ -631,6 +648,7 @@ EOF
     # create elasticsearch.yml
     cat > elasticsearch.yml<<EOF
 network.host: 0.0.0.0
+xpack.security.authc.api_key.enabled: true
 EOF
     chown 1000 elasticsearch.yml >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Created elasticsearch.yml"
@@ -2002,17 +2020,21 @@ fleet() {
   # get IP
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     IP=`ip route get 1 | awk '{print $NF;exit}'`
+    echo "${green}[DEBUG]${reset} OS: LINUX   IP found: ${IP}"
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'`
     IP=`ifconfig ${INTERFACE} | grep inet | awk '{ print $2 }'`
+    echo "${green}[DEBUG]${reset} OS: macOS   IP found: ${IP}"
   else
-    IP="NEED2UPDATE"
+    IP="NEED-2-UPDATE"
+    echo "${red}[DEBUG]${reset} OS: UNKNONW(script only works with linux or macOS)   IP found: ${IP}"
   fi
 
   # add to .env
   cat >> .env<<EOF
 FLEET_CERTS_DIR=/usr/share/elastic-agent/certificates
 EOF
+
   # add to elasticsearch.yml if it doesnt exist
   if [ `grep -c "xpack.security.authc.api_key.enabled" ${WORKDIR}/elasticsearch.yml` = 0 ]; then
     cat >> elasticsearch.yml<<EOF
@@ -2025,20 +2047,22 @@ EOF
       sleep 10
       echo "${green}[DEBUG]${reset} Restarting ${instance} for FLEET"
     done
-  fi
+    
+    checkhealth
 
-  checkhealth
+  fi
 
   # bootstrap fleet on ES & KB
   echo "${green}[DEBUG]${reset} Setting up kibana for fleet"
-  curl -k -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' >/dev/null 2>&1
-  sleep 70 & # no healthchecks on fleet so just going to sleep for 60
-  while kill -0 $! >/dev/null 2>&1
+  flag="false"
+#  while [[ "${flag}" != "true" ]]
+  while [ "${flag}" != "true" ]
   do
-    echo -n "."
-    sleep 2
+    flag=`curl -k -s -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' | jq -r '.isInitialized' 2>/dev/null`
+    sleep 5
+    echo "${green}[DEBUG]${reset} Fleet setup for kibana started. Will check status every 5 seconds until finished..."
   done
-  echo ""
+
   
   # create fleet.yml
   if [ ! -f ${WORKDIR}/fleet.yml ]; then
@@ -2055,11 +2079,26 @@ enabled: true
 EOF
   fi
 
+  # Setting Fleet URL
+  echo "${green}[DEBUG]${reset} Setting Fleet URL as https://'${IP}':8220"
+  curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+  --header 'kbn-xsrf: true' \
+  --header 'Content-Type: application/json' \
+  -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+
   if [ $(checkversion $VERSION) -lt $(checkversion "8.1.0") ]; then
+    
+    # Get policy_id
+    POLICYID=`curl -k -s -u elastic:${PASSWD} -XGET https://localhost:5601/api/fleet/agent_policies | jq -r '.items[] | select (.name | contains("Server policy")).id'`
+    echo "${green}[DEBUG]${reset} Fleet Server Policy ID: ${POLICYID}"
+
+    # Get enrollment token
+    ENROLLTOKEN=`curl -k -s -u elastic:${PASSWD} -XGET "https://localhost:5601/api/fleet/enrollment-api-keys" | jq -r '.list[] | select (.policy_id |contains("'${POLICYID}'")).api_key'`
+    echo "${green}[DEBUG]${reset} Fleet Server Enrollment API KEY: ${ENROLLTOKEN}"
+
     # Create service token
-    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
-    # SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq | grep value | awk {' print $2 '} | tr -d '"'`
     SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+    echo "${green}[DEBUG]${reset} Generated SERVICE TOKEN for fleet server: ${SERVICETOKEN}"
 
     # generate fleet-compose.yml
     cat > fleet-compose.yml<<EOF
@@ -2073,6 +2112,7 @@ services:
     environment:
       - FLEET_SERVER_ENABLE=true
       - FLEET_URL=https://fleet:8220
+      - FLEET_ENROLLMENT_TOKEN=${ENROLLTOKEN}
       - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
       - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
       - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
@@ -2091,14 +2131,14 @@ EOF
 
     echo "${green}[DEBUG]${reset} Created fleet-compose.yml"
 
-    # Setting Fleet URL
-    echo "${green}[DEBUG]${reset} Setting Fleet URL"
-    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
-    --header 'kbn-xsrf: true' \
-    --header 'Content-Type: application/json' \
-    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
-
-    sleep 5
+#    # Setting Fleet URL
+#    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+#    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+#    --header 'kbn-xsrf: true' \
+#    --header 'Content-Type: application/json' \
+#    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+#
+#    sleep 5
     
     ## ssl ca
     if [ -f ${WORKDIR}/ca.temp ]; then
@@ -2166,14 +2206,14 @@ EOF
 
     sleep 5
     
-    # Setting Fleet URL
-    echo "${green}[DEBUG]${reset} Setting Fleet URL"
-    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
-    --header 'kbn-xsrf: true' \
-    --header 'Content-Type: application/json' \
-    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
-
-    sleep 5
+#    # Setting Fleet URL
+#    echo "${green}[DEBUG]${reset} Setting Fleet URL"
+#    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
+#    --header 'kbn-xsrf: true' \
+#    --header 'Content-Type: application/json' \
+#    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
+#
+#    sleep 5
 
     # setting Elasticsearch URL and SSL certificate and fingerprint
     echo "${green}[DEBUG]${reset} Setting Elasticsearch URL & Fingerprint & SSL CA"
@@ -2216,8 +2256,8 @@ EOF
     sleep 5
 
     # Create service token
-    echo "${green}[DEBUG]${reset} Generating SERVICE TOKEN for fleet server"
     SERVICETOKEN=`curl -k -u "elastic:${PASSWD}" -s -X POST https://localhost:5601/api/fleet/service-tokens --header 'kbn-xsrf: true' | jq -r .value`
+    echo "${green}[DEBUG]${reset} Generated SERVICE TOKEN for fleet server: ${SERVICETOKEN}"
 
     # generate fleet-compose.yml
     cat > fleet-compose.yml<<EOF
@@ -2255,6 +2295,10 @@ EOF
   docker-compose -f fleet-compose.yml up -d >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} Started FLEET SERVER. - Please give it about a minute for things to settle before you go into the FLEET app."
 
+  echo ""
+  echo "${red}[DEBUG]${reset} Not sure if its my script or a bug but even when the Fleet server is registered correctly and healthy and you send the kibana API call to set the default fleet output"
+  echo "${red}[DEBUG]${reset} It updates the Fleet Settings in kibana but does not update the Fleet server's state.yml in 7.x" 
+  echo "${red}[DEBUG]${reset} Please browse to Fleet Settings and add something like \"# dork\" to the ${green}Elasticsearch output configuration (YAML)${reset} section and SAVE to update it"
 } # End of FLEET
 
 
