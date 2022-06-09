@@ -40,7 +40,7 @@ EOF
 yum install epel-release -y
 
 # install packages
-yum install openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl -y
+yum install unzip openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl -y
 
 # disable services
 for service in auditd firewalld mdmonitor postfix
