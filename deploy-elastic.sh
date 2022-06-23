@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
+# version 9.0 - added ldap & frozen tier
+# version 8.0 - added fleet settings
 # version 7.0 - added ES 8 only
 # version 6.2 - changed the way fleet is bootstrapped
 # version 6.1 - added additional functions and cleaned up
@@ -229,8 +231,8 @@ pullimage() {
 # cleanup deployment
 cleanup() {
   echo "${green}********** Cleaning up **********${reset}"
-  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 >/dev/null 2>&1
-  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 >/dev/null 2>&1
+  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 ldap >/dev/null 2>&1
+  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 ldap >/dev/null 2>&1
   docker network rm es_default >/dev/null 2>&1
   docker volume rm es_data01 >/dev/null 2>&1
   docker volume rm es_data02 >/dev/null 2>&1
@@ -2735,6 +2737,211 @@ services:
 
 } # End of apm function
 
+# LDAP
+ldap() {
+  # check to see if ${WORKDIR} exits
+  if [ ! -d ${WORKDIR} ]; then
+    echo "${red}[DEBUG]${reset} Deployment does not exist.  Starting deployment first"
+    stack ${VERSION}
+    echo "${green}********** Deploying OpenLDAP server and configure the stack with LDAP **********${reset}"
+  else
+    cd ${WORKDIR}
+    echo "${green}********** Deploying OpenLDAP server and configure the stack with LDAP **********${reset}"
+  fi
+
+  # check to see if ldap-compose.yml already exists.
+  if [ -f "ldap-compose.yml" ]; then
+    echo "${red}[DEBUG]${reset} ldap-compose.yml already exists. Exiting."
+    exit
+  fi
+
+  # grab the elastic password
+  grabpasswd
+
+  # check health before continuing
+  checkhealth
+
+  # pull image
+  pullimage "osixia/openldap"
+
+  # create ldif
+  echo "${green}[DEBUG]${reset} Generating ldap.ldif"
+  cat > ldap.ldif <<EOF
+# Entry 2: cn=user1,dc=example,dc=org
+dn: cn=user1,dc=example,dc=org
+cn: user1
+displayname: user1
+givenname: user1
+mail: user1@lab.lab
+objectclass: inetOrgPerson
+objectclass: top
+sn: user1
+userpassword: user1
+
+# Entry 3: cn=user2,dc=example,dc=org
+dn: cn=user2,dc=example,dc=org
+cn: user2
+displayname: user2
+givenname: user2
+mail: user2@lab.lab
+objectclass: inetOrgPerson
+objectclass: top
+sn: user2
+userpassword: user2
+
+# Entry 4: ou=groups,dc=example,dc=org
+dn: ou=groups,dc=example,dc=org
+objectclass: organizationalUnit
+objectclass: top
+ou: groups
+
+# Entry 5: cn=admins,ou=groups,dc=example,dc=org
+dn: cn=admins,ou=groups,dc=example,dc=org
+cn: admins
+objectclass: groupOfUniqueNames
+objectclass: top
+uniquemember: cn=user1,dc=example,dc=org
+
+# Entry 6: cn=users,ou=groups,dc=example,dc=org
+dn: cn=users,ou=groups,dc=example,dc=org
+cn: users
+objectclass: groupOfUniqueNames
+objectclass: top
+uniquemember: cn=user2,dc=example,dc=org
+
+# Entry 7: ou=users,dc=example,dc=org
+dn: ou=users,dc=example,dc=org
+objectclass: organizationalUnit
+objectclass: top
+ou: users
+EOF
+
+  # create ldap-compose.yml
+  cat > ldap-compose.yml<<EOF
+version: '2.2'
+
+services:
+  ldap:
+    container_name: ldap
+    image: osixia/openldap
+    volumes: ['./ldap.ldif:/tmp/ldap.ldif', './temp:/temp']
+    ports:
+      - 389:389
+    restart: on-failure
+EOF
+
+  # Start OpenLDAP
+  echo "${green}[DEBUG]${reset} Starting OpenLDAP"
+  docker-compose -f ldap-compose.yml up -d >/dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "${red}[DEBUG]${reset} Unable to start openldap container"
+    exit
+  else
+    echo "${green}[DEBUG]${reset} OpenLDAP container deployed"
+  fi
+  
+  sleep 10
+
+  # import ldap.ldif
+  echo "${green}[DEBUG]${reset} Importing ldap.ldif"
+  docker exec ldap ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/ldap.ldif -H ldap://localhost -ZZ >/dev/null 2>&1
+  
+  # updating elasticsearch.yml
+  echo "${green}[DEBUG]${reset} Updating elasticsearch.yml"
+  cat >> elasticsearch.yml<<EOF
+
+xpack:
+  security:
+    authc:
+      realms:
+        ldap:
+          ldap1:
+            order: 0
+            url: "ldap://ldap"
+            bind_dn: "cn=admin, dc=example, dc=org"
+            user_search:
+              base_dn: "dc=example,dc=org"
+              filter: "(cn={0})"
+            group_search:
+              base_dn: "dc=example,dc=org"
+EOF
+
+
+  # Creating role_mapping
+  echo "${green}[DEBUG]${reset} Creating role_mappings"
+
+  curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_security/role_mapping/ldap-admin" -H 'Content-Type: application/json' -d'
+{
+    "enabled" : true,
+    "roles" : [
+      "superuser"
+    ],
+    "rules" : {
+      "all" : [
+        {
+          "field" : {
+            "realm.name" : "ldap1"
+          }
+        },
+        {
+          "field" : {
+            "groups" : "cn=admins,ou=groups,dc=example,dc=org"
+          }
+        }
+      ]
+    },
+    "metadata" : { }
+  }'  >/dev/null 2>&1
+
+  curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_security/role_mapping/ldap-user" -H 'Content-Type: application/json' -d'
+{
+    "enabled" : true,
+    "roles" : [
+      "kibana_admin",
+      "beats_admin",
+      "machine_learning_admin",
+      "watcher_admin",
+      "transform_admin",
+      "rollup_admin",
+      "logstash_admin",
+      "ingest_admin",
+      "viewer"
+    ],
+    "rules" : {
+      "all" : [
+        {
+          "field" : {
+            "realm.name" : "ldap1"
+          }
+        },
+        {
+          "field" : {
+            "groups" : "cn=users,ou=groups,dc=example,dc=org"
+          }
+        }
+      ]
+    },
+    "metadata" : { }
+  }' >/dev/null 2>&1
+
+  echo "${green}[DEBUG]${reset} Adding xpack.security.authc.realms.ldap.ldap1.secure_bind_password to keystore and restarting instances"
+  for instance in es01 es02 es03
+  do
+    docker exec -i ${instance} bin/elasticsearch-keystore add -xf xpack.security.authc.realms.ldap.ldap1.secure_bind_password <<EOF
+admin
+EOF
+  docker restart ${instance}  >/dev/null 2>&1
+  done
+
+  # wait for cluster to be healthy
+  checkhealth
+  
+  echo "${green}[DEBUG]${reset} LDAP configured"
+  echo "${green}[DEBUG]${reset} user1/user1 is configured for ldap group admin and has superuser role"
+  echo "${green}[DEBUG]${reset} user2/user2 is configured for ldap group users and has *_admin roles"
+  echo ""
+} # end of ldap
+
 ###############################################################################################################
 
 if [ "${1}" != "cleanup" ]; then
@@ -2778,6 +2985,9 @@ case ${1} in
     else
       apm ${2}
     fi
+    ;;
+  ldap)
+    ldap ${2}
     ;;
   cleanup)
     cleanup
