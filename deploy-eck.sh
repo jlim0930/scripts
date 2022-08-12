@@ -1254,6 +1254,10 @@ spec:
               update-ca-certificates
             fi
             /usr/bin/tini -- /usr/local/bin/docker-entrypoint -e
+  http:
+    service:
+      spec:
+        type: LoadBalancer
 ---
 apiVersion: agent.k8s.elastic.co/v1alpha1
 kind: Agent
