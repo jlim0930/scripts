@@ -53,6 +53,7 @@ help()
   echo "${green}USAGE:${reset} ./`basename $0` command STACKversion ECKversion"
   echo ""
   echo "${blue}COMMANDS:${reset}"
+  echo "    ${green}operator${reset} - will just stand up the operator only and apply a trial license"
   echo "    ${green}stack|start|build${reset} - will stand up the ECK Operator, elasticsearch, & kibana with CLUSTER name : ${blue}eck-lab${reset}"
   echo "    ${green}beats${reset} - will stand up the basic stack + filebeat, metricbeat, packetbeat, & heartbeat"
   echo "    ${green}monitor1${reset} - will stand up the basic stack named ${blue}eck-lab${reset} and a monitoring stack named ${blue}eck-lab-monitor${reset}, filebeat, & metricbeat as PODS to report stack monitoring to ${blue}eck-lab-monitor${reset}"
@@ -1063,6 +1064,10 @@ EOF
   createsummary "${1}"
   echo ""
 
+# notes
+# you can create a normal deployment and patch it using kubectl patch kibana eck-lab --type merge -p '{"spec":{"monitoring":{"logs":{"elasticsearchRefs":[{"name":"eck-lab-monitor"}]},"metrics":{"elasticsearchRefs":[{"name":"eck-lab-monitor"}]}}}}' to change it to sidecar monitoring
+#
+
 }
 ###############################################################################################################
 # fleet server
@@ -1353,7 +1358,9 @@ EOF
 # main script
 
 # manually checking versions and limiting version if not cleanup
-if [ "${1}" != "cleanup" ]; then
+if [ "${1}" = "operator" ]; then
+  ECKVERSION=${2}
+elif [ "${1}" != "cleanup" ]; then
   VERSION=${2}
   ECKVERSION=${3}
   # manually limiting elasticsearch version to 7.10.0 or greater
@@ -1407,6 +1414,10 @@ checkjq
 checkkubectl
 
 case ${1} in
+  operator)
+    checkdir
+    operator
+    ;;
   build|start|stack)
     checkdir
     operator
