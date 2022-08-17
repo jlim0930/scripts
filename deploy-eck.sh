@@ -116,6 +116,7 @@ createsummary()
   do
     KIBANAIP=`kubectl get service | grep ${1}-kb-http | awk '{ print $4 }'`
     echo "${green}[DEBUG]${reset} Grabbing kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
+    sleep 2
   done
   echo "${1} kibana endpoint: https://${KIBANAIP}:5601" >> notes
 
@@ -1347,7 +1348,149 @@ EOF
   # checkfleethealth
   checkhealth "agent" "elastic-agent"
 
-  echo ""
+  # get fleet url
+  unset FLEETIP
+  while [ "${FLEETIP}" = "" -o "${FLEETIP}" = "<pending>" ]
+  do
+    FLEETIP=`kubectl get service | grep fleet-server-agent-http | awk '{ print $4 }'`
+    echo "${green}[DEBUG]${reset} Grabbing Fleet Server endpoint (external): ${blue}https://${FLEETIP}:8220${reset}"
+    sleep 2
+  done
+  echo "${1} Fleet Server endpoint: https://${FLEETIP}:8220" >> notes
+
+
+####
+# things needed 
+# fleet ip -> FLEETIP
+# es ip -> ESIP
+# fingerprint
+# ## fingerprint FINGERPRINT=`openssl x509 -fingerprint -sha256 -noout -in ${WORKDIR}/ca.crt | awk -F"=" {' print $2 '} | sed s/://g`
+  
+  # for Fleet Server 8.2+ - Add external output with fingerprint and verification_mode
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.2.0") ]; then
+
+    echo "${green}[DEBUG]${reset} Waiting 30 seconds for fleet server to calm down to set the external output"
+    sleep 30 & 
+    while kill -0 $! >/dev/null 2>&1
+    do
+      echo -n "."
+      sleep 2
+    done
+    echo ""
+
+    # need to set fleet server url
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "fleet_server_hosts":["https://${FLEETIP}:8220","https://fleet-server-agent-http.default.svc:8220"]
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWORD}" -X PUT "https://${KIBANAIP}:5601/api/fleet/settings" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)" >/dev/null 2>&1
+
+    sleep 10
+
+    # generate fingerprint
+    FINGERPRINT=`openssl x509 -fingerprint -sha256 -noout -in ${WORKDIR}/ca.crt | awk -F"=" {' print $2 '} | sed s/://g`
+
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "name": "external",
+  "type": "elasticsearch",
+  "hosts": ["https://${ESIP}:9200"],
+  "is_default": false,
+  "is_default_monitoring": false,
+  "ca_trusted_fingerprint": "${FINGERPRINT}",
+  "config_yaml": "ssl:\n  verification_mode: none"
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWORD}" -X POST "https://${KIBANAIP}:5601/api/fleet/outputs" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)" >/dev/null 2>&1
+
+    sleep 10
+
+    # Lets go ahead and create an External agent policy
+    # get id for the external output
+    EXTID=`curl -s -k -u "elastic:${PASSWORD}" https://${KIBANAIP}:5601/api/fleet/outputs | jq -r '.items[]| select(.name=="external")|.id'`
+
+
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "name":"External Agent Policy",
+  "description":"If you want to use elastic-agent from outside of the k8s cluster",
+  "namespace":"default",
+  "monitoring_enabled":["logs","metrics"],
+  "data_output_id":"${EXTID}",
+  "monitoring_output_id":"${EXTID}"
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWORD}" -X POST "https://${KIBANAIP}:5601/api/fleet/agent_policies?sys_monitoring=true" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)" >/dev/null 2>&1
+
+    sleep 10
+
+    echo "${green}[DEBUG]${reset} Output: external created.  You can use this output for elastic-agent from outside of k8s cluster."
+    echo "${green}[DEBUG]${reset} Please create a new agent policy using the external output if you want to use elastic-agent from outside of k8s cluster."
+    echo "${green}[DEBUG]${reset} Please use https://${FLEETIP}:8220 with --insecure to register your elastic-agent if you are coming from outside of k8s cluster."
+    echo ""
+
+  fi # end if for fleet server 8.2+ external output
+
+  # for Fleet Server 8.1 - 1 output no changes needed
+
+  # for Fleet Server 8.0 - 1 output sometimes the output is not set correctly. going to fix
+  if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.2.0") ]; then
+    
+    echo "${green}[DEBUG]${reset} Waiting 30 seconds for fleet server to calm down to set the output"
+    sleep 30 & 
+    while kill -0 $! >/dev/null 2>&1
+    do
+      echo -n "."
+      sleep 2
+    done
+    echo ""
+
+    generate_post_data()
+    {
+      cat <<EOF
+{
+  "name":"default",
+  "type":"elasticsearch",
+  "hosts":["https://eck-lab-es-http.default.svc:9200"],
+  "is_default":true,
+  "is_default_monitoring":true,
+  "config_yaml":"",
+  "ca_trusted_fingerprint":""
+}
+EOF
+    }
+
+    curl -k -u "elastic:${PASSWORD}" -X PUT "https://${KIBANAIP}:5601/api/fleet/outputs/fleet-default-output" \
+    --header 'kbn-xsrf: true' \
+    --header 'Content-Type: application/json' \
+    -d "$(generate_post_data)" >/dev/null 2>&1
+
+
+  fi # end if for fleet server 8.0-8.1
+
+  # for Fleet Server < 8.0 only 1 output can be set - do not need to do anything
 
 } # end fleet-server
 
@@ -1364,7 +1507,7 @@ EOF
 # manually checking versions and limiting version if not cleanup
 if [ "${1}" = "operator" ]; then
   ECKVERSION=${2}
-elif [ "${1}" != "cleanup" ]; then
+elif [[ "${1}" != @(cleanup|info|summary|detail) ]]; then
   VERSION=${2}
   ECKVERSION=${3}
   # manually limiting elasticsearch version to 7.10.0 or greater
