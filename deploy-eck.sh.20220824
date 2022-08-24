@@ -1504,8 +1504,12 @@ EOF
 ###############################################################################################################
 # main script
 
-
-ckversion() {
+# manually checking versions and limiting version if not cleanup
+if [ "${1}" = "operator" ]; then
+  ECKVERSION=${2}
+elif [[ "${1}" != @(cleanup|info|summary|detail) ]]; then
+  VERSION=${2}
+  ECKVERSION=${3}
   # manually limiting elasticsearch version to 7.10.0 or greater
   if [ $(checkversion $VERSION) -lt $(checkversion "7.10.0") ]; then
     echo "${red}[DEBUG]${reset} Script is limited to stack version 7.10.0 and higher"
@@ -1549,7 +1553,7 @@ ckversion() {
   fi
   echo "${green}[DEBUG]${reset} This might take a while.  In another window you can ${blue}watch -n2 kubectl get all${reset} or ${blue}kubectl get events -w${reset} to watch the stack being stood up"
   echo ""
-} # end ckversion
+fi
 
 # preflight checks before creating directories
 
@@ -1558,23 +1562,16 @@ checkkubectl
 
 case ${1} in
   operator)
-    ECKVERSION=${2}
     checkdir
     operator
     ;;
   build|start|stack)
-    VERSION=${2}
-    ECKVERSION=${3}
-    ckversion
     checkdir
     operator
     stack "eck-lab"
     summary
     ;;
   beats|beat)
-    VERSION=${2}
-    ECKVERSION=${3}
-    ckversion
     checkdir
     operator
     stack "eck-lab"
@@ -1582,9 +1579,6 @@ case ${1} in
     summary
     ;;
   monitor1)
-    VERSION=${2}
-    ECKVERSION=${3}
-    ckversion
     checkdir
     operator
     stack "eck-lab"
@@ -1593,9 +1587,6 @@ case ${1} in
     summary
     ;;
   monitor2)
-    VERSION=${2}
-    ECKVERSION=${3}
-    ckversion
     if [ $(checkversion $ECKVERSION) -lt $(checkversion "1.7.0") -o $(checkversion $VERSION) -lt $(checkversion "7.14.0") ]; then
       echo "${red}[DEBUG]${reset} Sidecar stack monitoring started with ECK 1.7.0 & STACK 7.14.0.  Please run cleanup and re-run wiht ECK operator 1.7.0+/Stack 7.14.0+"
       echo ""
@@ -1613,9 +1604,6 @@ case ${1} in
 #    snapshot ${2} ${3}
 #    ;;
   fleet)
-    VERSION=${2}
-    ECKVERSION=${3}
-    ckversion
     if [ $(checkversion $ECKVERSION) -lt $(checkversion "1.7.0") -o $(checkversion $VERSION) -lt $(checkversion "7.14.0") ]; then
       echo "${red}[DEBUG]${reset} Fleet server started with ECK 1.7.0 and STACK 7.14.0.  Please run cleanup and re-run with ECK operator 1.7.0+/Stack 7.14.0+"
       echo ""
