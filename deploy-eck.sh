@@ -55,6 +55,7 @@ help()
   echo "${blue}COMMANDS:${reset}"
   echo "    ${green}operator${reset} - will just stand up the operator only and apply a trial license"
   echo "    ${green}stack|start|build${reset} - will stand up the ECK Operator, elasticsearch, & kibana with CLUSTER name : ${blue}eck-lab${reset}"
+  echo "    ${green}dedicated${reset} - will stand up the ECK Operator, elasticsearch, & kibana with CLUSTER name : ${blue}eck-lab${reset} with 3 dedicated masters and 3 dedicated data nodes"
   echo "    ${green}beats${reset} - will stand up the basic stack + filebeat, metricbeat, packetbeat, & heartbeat"
   echo "    ${green}monitor1${reset} - will stand up the basic stack named ${blue}eck-lab${reset} and a monitoring stack named ${blue}eck-lab-monitor${reset}, filebeat, & metricbeat as PODS to report stack monitoring to ${blue}eck-lab-monitor${reset}"
   echo "    ${green}monitor2${reset} - will be the same as ${blue}monitor1${reset} however both filebeat & metricbeat will be a sidecar container inside of elasticsearch & kibana Pods. Limited to ECK ${blue}1.7.0+${reset} & STACK ${blue}7.14.0+${reset}"
@@ -325,7 +326,7 @@ spec:
   nodeSets:
   - name: default
     config:
-      node.roles: ["master", "data", "ingest", "ml", "remote_cluster_client"]
+      node.roles: ["master", "data", "ingest", "ml", "remote_cluster_client", "transform"]
       xpack.security.authc.api_key.enabled: true
     podTemplate:
       metadata:
@@ -384,6 +385,102 @@ EOF
   createsummary ${1}
 
 } # end of stack
+
+###############################################################################################################
+# dedicated
+dedicated() 
+{
+  echo ""
+  echo "${green} ********** Deploying ECK ${blue}${ECKVERSION}${green} STACK ${BLUE}${VERSION}${green} CLUSTER ${blue}${1}${reset} with DEDICATED masters and data nodes **************${reset}"
+  echo ""
+
+  # create elasticsearch.yaml
+  echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER ${blue}${1}${reset} Creating elasticsearch.yaml"
+  cat >> elasticsearch-${1}.yaml <<EOF
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: ${1}
+spec:
+  version: ${VERSION}
+  nodeSets:
+  - name: master
+    config:
+      node.roles: master
+      xpack.security.authc.api_key.enabled: true
+    podTemplate:
+      metadata:
+        labels:
+          scrape: es
+      spec:
+        initContainers:
+        - name: sysctl
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+    count: 3
+  - name: data
+    config:
+      node.roles: ["data", "ingest", "ml", "remote_cluster_client", "transform"]
+      xpack.security.authc.api_key.enabled: true
+    podTemplate:
+      metadata:
+        labels:
+          scrape: es
+      spec:
+        initContainers:
+        - name: sysctl
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+    count: 3
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+EOF
+
+  echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER ${blue}${1}${reset} Starting elasticsearch cluster."
+
+  kubectl apply -f elasticsearch-${1}.yaml > /dev/null 2>&1
+
+  # checkeshealth
+  checkhealth "elasticsearch" "${1}"
+
+  # create kibana.yaml
+  echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER  ${blue}${1}${reset} Creating kibana.yaml"
+    cat >> kibana-${1}.yaml <<EOF
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: ${1}
+spec:
+  version: ${VERSION}
+  count: 1
+  elasticsearchRef:
+    name: "${1}"
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+  podTemplate:
+    metadata:
+      labels:
+        scrape: kb
+EOF
+
+  echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER  ${blue}${1}${reset} Starting kibana."
+
+  kubectl apply -f kibana-${1}.yaml > /dev/null 2>&1
+
+  #checkkbhealth
+  checkhealth "kibana" "${1}"
+
+  createsummary ${1}
+
+} # end of dedicated
 
 ###############################################################################################################
 # filebeat autodiscover & metricbeat hosts as daemonset onto k8s hosts
@@ -1569,6 +1666,15 @@ case ${1} in
     checkdir
     operator
     stack "eck-lab"
+    summary
+    ;;
+  dedicated)
+    VERSION=${2}
+    ECKVERSION=${3}
+    ckversion
+    checkdir
+    operator
+    dedicated "eck-lab"
     summary
     ;;
   beats|beat)
