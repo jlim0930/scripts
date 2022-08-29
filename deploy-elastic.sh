@@ -287,6 +287,7 @@ stack() {
     cat > elasticsearch.yml<<EOF
 network.host: 0.0.0.0
 xpack.security.authc.api_key.enabled: true
+path.repo: "/temp"
 EOF
     chown 1000 elasticsearch.yml >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} elasticsearch.yml created"
@@ -655,6 +656,7 @@ EOF
     cat > elasticsearch.yml<<EOF
 network.host: 0.0.0.0
 xpack.security.authc.api_key.enabled: true
+path.repo: "/temp"
 EOF
     chown 1000 elasticsearch.yml >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Created elasticsearch.yml"
@@ -1395,7 +1397,18 @@ EOF
   fi   
 
   echo "${green}[DEBUG]${reset} Complete! - stack deployed. ${VERSION} elastic password: ${PASSWD}"
+  echo ""
+  
+  checkhealth
 
+  # new add local fs repository for /temp 
+  curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_snapshot/local_temp" -H 'Content-Type: application/json' -d'
+{
+  "type" : "fs",
+  "settings" : {
+    "location": "/temp"
+  }
+}' >/dev/null 2>&1
 } # build stack end
 
 
