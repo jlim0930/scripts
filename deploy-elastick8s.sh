@@ -29,6 +29,21 @@
 # eck 2.2
 #   ES 8.0+
 
+# ECK - k8s versions
+#2.3-2.4
+#        kubernetes 1.20-1.24
+#2.0-2.2
+#        kubernetes 1.19-1.23
+#1.8-1.9
+#        kubernetes 1.18-1.22
+#1.7
+#        kubernetes 1.17-1.21
+#1.6
+#        kubernetes 1.16-1.20
+#1.1-1.5
+#        kubernets 1.12+
+
+
 # Starting 7.17 stack container image changed to ubuntu - some fixes are needed due to this
 
 # helm only for 7.14.0-> 7.17.x - older versions not as clean
