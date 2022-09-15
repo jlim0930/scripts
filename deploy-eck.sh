@@ -4,6 +4,11 @@
 # 
 # version 1.0
 
+##################
+#
+# this script is no longer being maintained. Please use the new script curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o deploy-elastick8s.sh
+#
+#################
 # curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-eck.sh -o deploy-eck.sh
 #
 # NOTES
