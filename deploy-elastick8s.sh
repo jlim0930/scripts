@@ -29,21 +29,6 @@
 # eck 2.2
 #   ES 8.0+
 
-# ECK - k8s versions
-#2.3-2.4
-#        kubernetes 1.20-1.24
-#2.0-2.2
-#        kubernetes 1.19-1.23
-#1.8-1.9
-#        kubernetes 1.18-1.22
-#1.7
-#        kubernetes 1.17-1.21
-#1.6
-#        kubernetes 1.16-1.20
-#1.1-1.5
-#        kubernets 1.12+
-
-
 # Starting 7.17 stack container image changed to ubuntu - some fixes are needed due to this
 
 # helm only for 7.14.0-> 7.17.x - older versions not as clean
@@ -168,6 +153,8 @@ checkjq() {
   if ! [ -x "$(command -v jq)" ]; then
     echo "${red}[DEBUG]${reset} jq is not installed.  Please install jq and try again."
     exit
+  else
+    echo "${green}[DEBUG]${reset} jq found"
   fi
 } # end checkjq
 
@@ -176,6 +163,8 @@ checkopenssl() {
   if ! [ -x "$(command -v openssl)" ]; then
     echo "${red}[DEBUG]${reset} openssl is not installed.  Please install openssl and try again."
     exit
+  else
+    echo "${green}[DEBUG]${reset} openssl found"
   fi
 } # end checkopenssl
 
@@ -186,6 +175,8 @@ checkdocker() {
   if [ $? -ne 0 ]; then
     echo "${red}[DEBUG]${reset} Docker is not running or you are not part of the docker group.  Please install docker and ensure that you are part of the docker group and try again."
     exit
+  else
+    echo "${green}[DEBUG]${reset} docker found & running"
   fi
 } # end checkdocker
 
@@ -195,10 +186,12 @@ checkkubectl()
   if [ `kubectl version 2>/dev/null | grep -c "Client Version"` -lt 1 ]; then
     echo "${red}[DEBUG]${reset} kubectl is not installed.  Please install kubectl and try again."
     exit
+  else
+    echo "${green}[DEBUG]${reset} kubectl found"
   fi
   if [ `kubectl version 2>/dev/null | grep -c "Server Version"` -lt 1 ]; then
     echo "${red}[DEBUG]${reset} kubectl is not connecting to any kubernetes environment"
-    echo "${red}[DEBUG]${reset} if you did not setup your k8s environment.  Please configure your kubernetes environment and try again"
+    echo "${red}[DEBUG]${reset} if you did not setup your k8s environment.  Please configure your kubernetes context and try again"
     exit
   fi
 } # end checkubectl
@@ -209,6 +202,8 @@ checkhelm()
   if ! [ -x "$(command -v helm)" ]; then
     echo "${red}[DEBUG]${reset} helm is not installed.  Please install helm and try again. https://helm.sh/docs/intro/install/"
     exit
+  else
+    echo "${green}[DEBUG]${reset} helm found"
   fi
 } # end checkhelm
 
@@ -248,8 +243,10 @@ checkcontainerimage() {
   # check to see if the container image exists or not
   docker manifest inspect ${1} >/dev/null 2>&1
   if [ $? -ne 0 ]; then
-    echo "${red}[DEBUG]${reset} Image ${1} does not exist.  Please verify and try again"
+    echo "${red}[DEBUG]${reset} Image ${blue}${1}${reset} does not exist.  Please verify and try again"
     exit
+  else
+    echo "${green}[DEBUG]${reset} container image ${blue}${1}${reset} is valid"
   fi
 } # end checkcontainerimage
 
@@ -352,87 +349,144 @@ createsummary()
   # FOR ECK deployments
   if [ -e ${WORKDIR}/ECK ]; then
     unset PASSWORD
+    c=0
     while [ "${PASSWORD}" = "" ]
     do
       PASSWORD=$(kubectl get secret ${1}-es-elastic-user -o go-template='{{.data.elastic | base64decode}}')
-      echo "${green}[DEBUG]${reset} Grabbing elastic password for ${1}: ${blue}${PASSWORD}${reset}"
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch password."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
   
     unset ESIP
+    c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
     do
       ESIP=`kubectl get service | grep ${1}-es-http | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
   
     unset KIBANAIP
+    c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
     do
       KIBANAIP=`kubectl get service | grep ${1}-kb-http | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get kibana endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
     echo "${1} kibana endpoint: https://${KIBANAIP}:5601" >> notes
 
-    if [ "${1}" = "eck-lab" ]; then
-      kubectl get secrets ${1}-es-http-certs-public -o jsonpath="{.data.ca\.crt}" | base64 -d > ca.crt
-    fi
+    kubectl get secrets ${1}-es-http-certs-public -o jsonpath="{.data.ca\.crt}" | base64 -d > ${WORKDIR}/ca.crt
+
   # FOR HELM deployments
   elif [ -e ${WORKDIR}/HELM ]; then
     unset PASSWORD
+    c=0
     while [ "${PASSWORD}" = "" ]
     do
       PASSWORD=$(kubectl get secrets elastic-credentials -o go-template='{{.data.password | base64decode}}')
-      echo "${green}[DEBUG]${reset} Grabbing elastic password for ${1}: ${blue}${PASSWORD}${reset}"
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch password."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
   
     unset ESIP
+    c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
     do
       ESIP=`kubectl get service | grep ${1}-es-default | grep -v headless | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
   
     unset KIBANAIP
+    c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
     do
       KIBANAIP=`kubectl get service | grep helm-lab-kb-kibana | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get kibana endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
     echo "${1} kibana endpoint: https://${KIBANAIP}:5601" >> notes
+
   # FOR NATIVE deployments
   elif [ -e ${WORKDIR}/NATIVE ]; then
     unset PASSWORD
+    c=0
     while [ "${PASSWORD}" = "" ]
     do
       PASSWORD=$(kubectl get secrets elastic-credentials -o go-template='{{.data.password | base64decode}}')
-      echo "${green}[DEBUG]${reset} Grabbing elastic password for ${1}: ${blue}${PASSWORD}${reset}"
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch password."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
   
     unset ESIP
+    c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
     do
       ESIP=`kubectl get service | grep ${1}-default | grep -v headless | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get elasticsearch endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
   
     unset KIBANAIP
+    c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
     do
       KIBANAIP=`kubectl get service | grep native-lab-kibana | awk '{ print $4 }'`
-      echo "${green}[DEBUG]${reset} Grabbing kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
-      sleep 3
+      sleep 1
+      ((c++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get kibana endpoint."
+        exit
+      fi
     done
+    echo "${green}[DEBUG]${reset} Grabbed kibana endpoint for ${1}: ${blue}https://${KIBANAIP}:5601${reset}"
     echo "${1} kibana endpoint: https://${KIBANAIP}:5601" >> notes
   fi
 
@@ -502,21 +556,11 @@ summary()
 # FUNCTION - beatsetup
 beatsetup()
 {
-  echo ""
 
-  echo "${green}[DEBUG]${reset} Running setup for filebeat.."
-  kubectl delete pod filebeat-seed >/dev/null 2>&1
-  kubectl run -it filebeat-seed --image=docker.elastic.co/beats/filebeat:${VERSION} -- sh -c "filebeat setup -E output.elasticsearch.hosts=\"${ESIP}:9200\" -E output.elasticsearch.protocol=https -E output.elasticsearch.username=elastic -E output.elasticsearch.password=${PASSWORD} -E output.elasticsearch.ssl.verification_mode=none -E setup.kibana.host=\"${KIBANAIP}:5601\" -E setup.kibana.protocol=https -E setup.kibana.username=elastic -E setup.kibana.password=${PASSWORD} -E setup.kibana.ssl.verification_mode=none -E setup.ilm.overwrite=true" >/dev/null 2>&1
-  kubectl delete pod filebeat-seed >/dev/null 2>&1
-
-  echo ""
-
-  echo "${green}[DEBUG]${reset} Running setup for metricbeat.."
-  kubectl delete pod metricbeat-seed >/dev/null 2>&1
-  kubectl run -it metricbeat-seed --image=docker.elastic.co/beats/metricbeat:${VERSION} -- sh -c "metricbeat setup -E output.elasticsearch.hosts=\"${ESIP}:9200\" -E output.elasticsearch.protocol=https -E output.elasticsearch.username=elastic -E output.elasticsearch.password=${PASSWORD} -E output.elasticsearch.ssl.verification_mode=none -E setup.kibana.host=\"${KIBANAIP}:5601\" -E setup.kibana.protocol=https -E setup.kibana.username=elastic -E setup.kibana.password=${PASSWORD} -E setup.kibana.ssl.verification_mode=none -E setup.ilm.overwrite=true" >/dev/null 2>&1
-  kubectl delete pod metricbeat-seed >/dev/null 2>&1
-  
-  echo ""
+  echo "${green}[DEBUG]${reset} Running setup for ${1}.."
+  kubectl delete pod beats-setup >/dev/null 2>&1
+  kubectl run -it beats-setup --image=docker.elastic.co/beats/${1}:${VERSION} -- sh -c "${1} setup -E output.elasticsearch.hosts=\"${ESIP}:9200\" -E output.elasticsearch.protocol=https -E output.elasticsearch.username=elastic -E output.elasticsearch.password=${PASSWORD} -E output.elasticsearch.ssl.verification_mode=none -E setup.kibana.host=\"${KIBANAIP}:5601\" -E setup.kibana.protocol=https -E setup.kibana.username=elastic -E setup.kibana.password=${PASSWORD} -E setup.kibana.ssl.verification_mode=none -E setup.ilm.overwrite=true" >/dev/null 2>&1
+  kubectl delete pod beats-setup >/dev/null 2>&1
 
 } # end beatsetup
 
@@ -766,7 +810,7 @@ EOF
   kubectl apply -f ${WORKDIR}/elasticsearch-${1}.yaml > /dev/null 2>&1
 
   # checkeshealth
-  checkhealth "sts" "${1}-es-default" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-es-default" "readyReplicas" "3"
 
   # create kibana.yaml
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER  ${blue}${1}${reset} Creating kibana.yaml"
@@ -1049,8 +1093,8 @@ EOF
   kubectl apply -f ${WORKDIR}/elasticsearch-${1}.yaml > /dev/null 2>&1
 
   # checkeshealth
-  checkhealth "sts" "${1}-es-master" "readyReplicas" "3"
-  checkhealth "sts" "${1}-es-data" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-es-master" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-es-data" "readyReplicas" "3"
 
   # create kibana.yaml
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} CLUSTER  ${blue}${1}${reset} Creating kibana.yaml"
@@ -1192,6 +1236,59 @@ roleRef:
   kind: ClusterRole
   name: filebeat
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: heartbeat
+subjects:
+- kind: ServiceAccount
+  name: heartbeat
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: heartbeat
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: heartbeat
+subjects:
+- kind: ServiceAccount
+  name: heartbeat
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: heartbeat
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: heartbeat
+  labels:
+    k8s-app: heartbeat
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - namespaces
+  - pods
+  - services
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources:
+    - replicasets
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: heartbeat
+  namespace: default
+  labels:
+    k8s-app: heartbeat
 EOF
 
   kubectl apply -f ${WORKDIR}/beats-crds.yaml > /dev/null 2>&1
@@ -1418,11 +1515,15 @@ spec:
   config:
     heartbeat.monitors:
     - type: tcp
+      name: "eck-lab elastic endpoint"
       schedule: '@every 5s'
-      hosts: ["${1}-es-http.default.svc:9200"]
-    - type: tcp
+      hosts: ["eck-lab-es-http.default.svc:9200"]
+    - type: http
+      name: "eck-lab kibana endpoint"
       schedule: '@every 5s'
-      hosts: ["${1}-kb-http.default.svc:5601"]
+      hosts: ["https://eck-lab-kb-http.default.svc:5601"]
+      ssl.verification_mode: none
+      check.request.method: HEAD
   deployment:
     replicas: 1
     podTemplate:
@@ -1753,7 +1854,7 @@ EOF
   kubectl apply -f ${WORKDIR}/monitor2.yaml > /dev/null 2>&1
 
   # checkkbhealth
-  checkhealth "sts" "${1}-es-default" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-es-default" "readyReplicas" "3"
   checkhealth "deployment" "${1}-kb" "readyReplicas" "1"
 
   createsummary "${1}"
@@ -2249,7 +2350,7 @@ volumeClaimTemplate:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 10Gi
+      storage: 2Gi
 
 protocol: https
 
@@ -2265,7 +2366,7 @@ EOF
   echo "${green}[DEBUG]${reset} Starting elasticsearch"
   helm install elasticsearch elastic/elasticsearch -f ${WORKDIR}/es-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
-  checkhealth "sts" "${1}-es-default" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-es-default" "readyReplicas" "3"
   echo ""
 
   # start kibana
@@ -2548,14 +2649,26 @@ helmbeats()
 
   echo "${green}[DEBUG]${reset} Deploying filebeat via helm"
 
-  beatsetup
+  beatsetup "filebeat"
+  beatsetup "metricbeat"
   
   echo "${green}[DEBUG]${reset} Creating fb-values.yaml"
   cat > ${WORKDIR}/fb-values.yaml <<EOF
 ---
 daemonset:
   filebeatConfig:
-    filebeat.yml: |
+    filebeat.yml: | 
+      filebeat.inputs:
+      - type: container
+        paths:
+          - /var/log/containers/*.log
+        processors:
+        - add_kubernetes_metadata:
+            host: \${NODE_NAME}
+            matchers:
+            - logs_path:
+                logs_path: "/var/log/containers/"
+
       filebeat.autodiscover:
         providers:
           - type: kubernetes
@@ -2792,14 +2905,16 @@ EOF
   echo "${green}[DEBUG]${reset} Deploying logstash"
   helm install ${1}-ls elastic/logstash -f ${WORKDIR}/ls-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
-  checkhealth "sts" "${1}-ls-logstash" "readyReplicas" "1"
+  checkhealth "statefulset" "${1}-ls-logstash" "readyReplicas" "1"
 
 } # end helmlogstash
 
 # FUNCTION - helmlsbeats
 helmlsbeats() {
 
-  beatsetup
+  beatsetup "filebeat"
+  beatsetup "metricbeat"
+
   echo ""
   echo "${green}[DEBUG]${reset} Deploying filebeat via helm for logstash output"
   
@@ -3116,7 +3231,7 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: 10Gi
+          storage: 2Gi
   template:
     metadata:
       name: "${1}-default"
@@ -3304,7 +3419,7 @@ EOF
   echo "${green}[DEBUG]${reset} Starting elasticsearch"
   kubectl apply -f ${WORKDIR}/elasticsearch.yaml >/dev/null 2>&1
 
-  checkhealth "sts" "${1}-default" "readyReplicas" "3"
+  checkhealth "statefulset" "${1}-default" "readyReplicas" "3"
   sleep 5
   echo ""
   
@@ -3529,7 +3644,9 @@ EOF
 nativebeats()
 {
 
-  beatsetup
+  beatsetup "filebeat"
+  beatsetup "metricbeat"
+  
   echo ""
   echo "${green}[DEBUG]${reset} Deploying filebeat via kubernetes"
 
@@ -3579,6 +3696,7 @@ data:
               - /var/log/containers/*\${data.kubernetes.container.id}.log
 
     processors:
+      - add_kubernetes_metadata:
       - add_cloud_metadata:
       - add_host_metadata:
 
@@ -4594,11 +4712,6 @@ EOF
 # MAIN SCRIPT
 #############################################################
 
-# pre-flight checks before starting
-checkjq
-checkdocker
-checkkubectl
-checkopenssl
 
 case ${1} in
   operator)
@@ -4606,6 +4719,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     ECKVERSION=${2}
     checkdir
     operator
@@ -4615,6 +4732,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4629,6 +4750,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4640,6 +4765,14 @@ case ${1} in
     summary
     ;;
   dedicated)
+    if [ -z ${2} -o -z ${3} ]; then
+      help
+      exit
+    fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4650,6 +4783,14 @@ case ${1} in
     summary
     ;;
   beats|beat)
+    if [ -z ${2} -o -z ${3} ]; then
+      help
+      exit
+    fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4665,6 +4806,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4681,6 +4826,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     ECKVERSION=${3}
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4705,14 +4854,18 @@ case ${1} in
     fi
     VERSION=${2}
     ECKVERSION=${3}
-    checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
-    checkrequiredversion
     if [ $(checkversion $ECKVERSION) -lt $(checkversion "1.7.0") -o $(checkversion $VERSION) -lt $(checkversion "7.14.0") ]; then
       echo "${red}[DEBUG]${reset} Fleet server started with ECK 1.7.0 and STACK 7.14.0.  Please run cleanup and re-run with ECK operator 1.7.0+/Stack 7.14.0+"
       echo ""
       help
       exit
     else
+      checkjq
+      checkdocker
+      checkkubectl
+      checkopenssl
+      checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
+      checkrequiredversion
       checkdir
       operator
       stackbuild "eck-lab"
@@ -4725,8 +4878,12 @@ case ${1} in
       help
       exit
     fi
-    VERSION=${2}
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     checkhelm
+    VERSION=${2}
     checkrequiredversionhelm
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
     checkdir
@@ -4738,8 +4895,12 @@ case ${1} in
       help
       exit
     fi
-    VERSION=${2}
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     checkhelm
+    VERSION=${2}
     checkrequiredversionhelm
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
     checkdir
@@ -4752,8 +4913,12 @@ case ${1} in
       help
       exit
     fi
-    VERSION=${2}
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     checkhelm
+    VERSION=${2}
     checkrequiredversionhelm
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
     checkdir
@@ -4766,8 +4931,12 @@ case ${1} in
       help
       exit
     fi
-    VERSION=${2}
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     checkhelm
+    VERSION=${2}
     checkrequiredversionhelm
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
     checkdir
@@ -4777,8 +4946,16 @@ case ${1} in
     summary
     ;;
   helmmonitor)
-    VERSION=${2}
+    if [ -z ${2} ]; then
+      help
+      exit
+    fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     checkhelm
+    VERSION=${2}
     checkrequiredversionhelm
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
     checkdir
@@ -4791,6 +4968,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     checkrequiredversionnative "7.3.0"
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4803,6 +4984,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     checkrequiredversionnative "7.3.0"
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
@@ -4816,6 +5001,10 @@ case ${1} in
       help
       exit
     fi
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
     VERSION=${2}
     checkrequiredversionnative "7.5.0"
     checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
