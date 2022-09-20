@@ -8,13 +8,15 @@ if [ -f /ran_startup ]; then
   exit;
 fi
 
-# disable selinux
-sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
-setenforce Permissive
+# if OS is RHEL based
+if [[ `cat /etc/os-release | grep ^NAME` =~ "CentOS" ]]; then
+  # disable selinux
+  sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
+  setenforce Permissive
 
-# create elasticsearch repo
-rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
-cat >> /etc/yum.repos.d/elasticsearch.repo<<EOF
+  # create elasticsearch repo
+  rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+  cat >> /etc/yum.repos.d/elasticsearch.repo<<EOF
 [elasticsearch-7]
 name=Elasticsearch repository for 7.x packages
 baseurl=https://artifacts.elastic.co/packages/7.x/yum
@@ -34,38 +36,38 @@ autorefresh=1
 type=rpm-md
 EOF
 
+  # install epel repository
+  yum install epel-release -y
 
+  # install packages
+  yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl -y
 
-# install epel repository
-yum install epel-release -y
+  # disable services
+  for service in auditd firewalld mdmonitor postfix
+  do
+    systemctl disable ${service}
+  done
 
-# install packages
-yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl -y
+  # install docker
+  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  sh /tmp/get-docker.sh
+  systemctl daemon-reload
+  systemctl enable docker
+  systemctl start docker
 
-# disable services
-for service in auditd firewalld mdmonitor postfix
-do
-  systemctl disable ${service}
-done
-
-# install docker
-curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-sh /tmp/get-docker.sh
-systemctl daemon-reload
-systemctl enable docker
-systemctl start docker
-
-# updating vm.max_map_count
-cat >> /etc/sysctl.d/20-elastic.conf<<EOF
+  # updating vm.max_map_count
+  cat >> /etc/sysctl.d/20-elastic.conf<<EOF
 vm.max_map_count = 262144
 EOF
 
-# install some of my scripts
-curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o /usr/local/bin/deploy-elastic.sh
-curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
-chmod +x /usr/local/bin/*.sh
+  # install some of my scripts
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o /usr/local/bin/deploy-elastic.sh
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o /usr/local/bin/deploy-elastick8s.sh
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
+  chmod +x /usr/local/bin/*.sh
 
-# update packages and reboot - updating packages is taking super long so turning off for now
-#yum update -y
-echo 'done' > /ran_startup
-reboot
+  # update packages and reboot - updating packages is taking super long so turning off for now
+  #yum update -y
+  echo 'done' > /ran_startup
+  reboot
+fi
