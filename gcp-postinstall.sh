@@ -9,7 +9,7 @@ if [ -f /ran_startup ]; then
 fi
 
 # if OS is RHEL based
-if [[ `cat /etc/os-release | grep ^NAME` =~ "CentOS" ]]; then
+if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]]; then
   # disable selinux
   sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
   setenforce Permissive
@@ -68,7 +68,36 @@ EOF
   chmod +x /usr/local/bin/*.sh
 
   #yum update -y
-  
+elif [[ `cat /etc/os-release | grep ^ID` =~ "debian" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "ubuntu" ]]; then
+
+  # install packages
+  apt-get update
+  apt-get install unzip openssl bash-completion git wget nmap bc jq docker-compose kubectl -y
+
+  # add elasticsearch repo
+  wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+  apt-get install apt-transport-https -y
+  echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-7.x.list
+  echo "deb https://artifacts.elastic.co/packages/8.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-8.x.list
+  apt-get update
+
+  # disable services
+  for service in apparmor 
+  do
+    systemctl disable ${service}
+  done
+
+  # updating vm.max_map_count
+  cat >> /etc/sysctl.d/20-elastic.conf<<EOF
+vm.max_map_count = 262144
+EOF
+
+  # install some of my scripts
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastic.sh -o /usr/local/bin/deploy-elastic.sh
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o /usr/local/bin/deploy-elastick8s.sh
+  curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
+  chmod +x /usr/local/bin/*.sh
+fi
+
   echo "done" > /ran_startup
   reboot
-fi
