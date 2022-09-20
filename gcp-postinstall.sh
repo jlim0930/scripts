@@ -67,7 +67,7 @@ EOF
   curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
   chmod +x /usr/local/bin/*.sh
 
-  yum update -y
+  #yum update -y
   
   echo "done" > /ran_startup
   reboot
