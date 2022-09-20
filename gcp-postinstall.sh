@@ -9,7 +9,7 @@ if [ -f /ran_startup ]; then
 fi
 
 # if OS is RHEL based
-if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]]; then
+if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rocky" ]]; then
   # disable selinux
   sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
   setenforce Permissive
@@ -82,7 +82,7 @@ elif [[ `cat /etc/os-release | grep ^ID` =~ "debian" ]] || [[ `cat /etc/os-relea
   apt-get update
 
   # disable services
-  for service in apparmor 
+  for service in apparmor ufw
   do
     systemctl disable ${service}
   done
