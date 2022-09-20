@@ -49,11 +49,12 @@ EOF
   done
 
   # install docker
-  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-  sh /tmp/get-docker.sh
-  systemctl daemon-reload
-  systemctl enable docker
-  systemctl start docker
+  # will just grab the script but not install docker to save time
+  curl -fsSL https://get.docker.com -o /usr/local/bin/get-docker.sh
+  # sh /tmp/get-docker.sh
+  # systemctl daemon-reload
+  # systemctl enable docker
+  # systemctl start docker
 
   # updating vm.max_map_count
   cat >> /etc/sysctl.d/20-elastic.conf<<EOF
@@ -66,8 +67,8 @@ EOF
   curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
   chmod +x /usr/local/bin/*.sh
 
-  # update packages and reboot - updating packages is taking super long so turning off for now
-  #yum update -y
-  echo 'done' > /ran_startup
+  yum update -y
+  
+  echo "done" > /ran_startup
   reboot
 fi
