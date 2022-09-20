@@ -84,7 +84,8 @@ start() {
 	  --machine-type=${gke_machine_type} \
 	  --disk-type=pd-ssd \
 	  --image-type="COS_CONTAINERD" \
-	  --release-channel stable
+	  --release-channel stable \
+	  --enable-autoscaling --min-nodes "0" --max-nodes "3"
 
   echo ""
   echo "${green}[DEBUG]${reset} Configure kubectl context for ${gke_cluster_name}"
