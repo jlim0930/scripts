@@ -35,7 +35,7 @@ WORKDIR="${HOME}/elasticstack"
 # colors
 red=`tput setaf 1`
 green=`tput setaf 2`
-blue=`tput setaf 4`
+blue=`tput setaf 14`
 reset=`tput sgr0`
 
 ###############################################################################################################
@@ -52,6 +52,7 @@ help()
   echo "     ${green}monitor${reset} - will stand up a stack with metricbeats monitoring"
   echo "     ${green}snapshot${reset} - will stand up a stack with minio (http) as snapshot repository"
   echo "     ${green}fleet${reset} - will stand up a stack wtih a fleet server"
+  echo "     ${green}ldap${reset} - will stand up a stack wtih an LDAP server and configures realm"
   echo "     ${green}entsearch${reset} - will stand up a stack with enterprise search"
   echo "     ${green}apm${reset} - will stand up a stack with apmserver"
   echo ""
@@ -79,6 +80,27 @@ help()
 ###############################################################################################################
 
 # functions
+
+# spinner
+spinner() {
+  local PROC="${1}"
+
+  tput civis
+
+  # Clear Line
+  CL="\e[2K"
+  # Spinner Character
+  SPINNER="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+  while [ $(ps -ef | grep -c ${PROC}) -ge 2 ]; do
+    for (( i=0; i<${#SPINNER}; i++ )); do
+      sleep 0.05
+      printf "${CL}${SPINNER:$i:1} ${2}\r"
+    done
+  done
+
+  tput cnorm
+}
 
 # check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
 version() {
@@ -165,38 +187,23 @@ checkcontainer() {
   done
 } # end of checkcontainer function
 
-# check to make sure that the deployment is in GREEN status
 checkhealth() {
-  while true
-  do
-    if [ `curl -s --cacert ${WORKDIR}/ca.crt -u elastic:${PASSWD} https://localhost:9200/_cluster/health | grep -c green` = 1 ]; then
-      sleep 2
-      break
-    else
-      echo "${red}[DEBUG]${reset} elasticsearch is unhealthy. Checking again in 2 seconds... if this doesnt finish in ~ 30 seconds something is wrong ctrl-c please."
-      sleep 2
-    fi
-  done
+  echo ""
+  until [ $(curl -s --cacert ${WORKDIR}/ca.crt -u elastic:${PASSWD} https://localhost:9200/_cluster/health | grep -c green) -eq 1 ]; do
+    sleep 2
+  done &
+  spinner $! "${blue}[DEBUG]${reset} Checking cluster health.  If this does not finish in ~ 1 minute something is wrong." 
+  echo ""
+}
 
-  echo "${green}[DEBUG]${reset} elasticsearch health is ${green}GREEN${reset} moving forward."
-} # end of checkhealth function
-
-# check fleet status
 checkfleet() {
-  while true
-    do
-      if [ `curl -f -s -k https://localhost:8220/api/status | grep -c HEALTHY` = 1 ]; then
-        sleep 2
-        break
-      else
-        echo "${red}[DEBUG]${reset} fleet is unhealthy.  Checking again in 2 seconds.. if fleet does not become healthy in ~ 30 seconds something is wrong ctrl-c please. First startup takes some time"
-        sleep 2
-      fi
-    done
-
-    echo "${green}[DEBUG]${reset} fleet is ${green}HEALTHY${reset} moving foward."
-
-} # end of checkfleet
+  echo ""
+  until [ $(curl -f -s -k https://localhost:8220/api/status | grep -c HEALTHY) -eq 1 ]; do
+    sleep 2
+  done &
+  spinner $! "${blue}[DEBUG]${reset} Checking fleet server health.  If this does not finish in ~ 1 minute something is wrong." 
+  echo ""
+}
 
 # grab the elastic password
 grabpasswd() {
@@ -224,7 +231,7 @@ pullimage() {
       exit
     fi
   else
-    echo "${green}[DEBUG]${reset} "${1}" docker image already exists.. moving forward.."
+    echo "${green}[DEBUG]${reset} "${1}" docker image already exists.."
   fi
 } # end of pullimage function
 
@@ -2170,7 +2177,7 @@ fleet() {
     IP=`ip route get 1 | awk '{print $NF;exit}'`
     echo "${green}[DEBUG]${reset} OS: LINUX   IP found: ${IP}"
   elif [[ "$OSTYPE" == "darwin"* ]]; then
-    INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'`
+    INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'| tail -n1`
     IP=`ifconfig ${INTERFACE} | grep inet | awk '{ print $2 }'`
     echo "${green}[DEBUG]${reset} OS: macOS   IP found: ${IP}"
   else
@@ -2202,15 +2209,19 @@ EOF
 
   # bootstrap fleet on ES & KB
   echo "${green}[DEBUG]${reset} Setting up kibana for fleet"
-  flag="false"
-#  while [[ "${flag}" != "true" ]]
-  while [ "${flag}" != "true" ]
-  do
-    flag=`curl -k -s -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' | jq -r '.isInitialized' 2>/dev/null`
-    sleep 5
-    echo "${green}[DEBUG]${reset} Fleet setup for kibana started. Will check status every 5 seconds until finished..."
-  done
-
+#  flag="false"
+#  while [ "${flag}" != "true" ]
+#  do
+#    flag=`curl -k -s -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' | jq -r '.isInitialized' 2>/dev/null`
+#    sleep 5
+#    echo "${green}[DEBUG]${reset} Fleet setup for kibana started. Will check status every 5 seconds until finished..."
+#  done
+  echo ""
+  until [ $(curl -k -s -u "elastic:${PASSWD}" -s -XPOST https://localhost:5601/api/fleet/setup --header 'kbn-xsrf: true' | jq -r '.isInitialized' 2>/dev/null) ]; do
+    sleep 2
+  done &
+  spinner $! "${blue}[DEBUG]${reset} Waiting for fleet setup to complete.  If this runs for longer than ~ 1 minute something is wrong"
+  echo ""
   
   # create fleet.yml
   if [ ! -f ${WORKDIR}/fleet.yml ]; then
