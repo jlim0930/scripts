@@ -117,35 +117,23 @@ help()
 
 # FUNCTION - spinner
 spinner() {
-tput civis
+  local PROC="${1}"
 
-# Clear Line
-CL="\e[2K"
-# Spinner Character
-SPINNER="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+  tput civis
 
-function spinnersub() {
-  task=$1
-  msg=$2
-  while :; do
-    jobs %1 > /dev/null 2>&1
-    [ $? = 0 ] || {
-      printf "${CL}✓ ${task} Done\n"
-      break
-    }
+  # Clear Line
+  CL="\e[2K"
+  # Spinner Character
+  SPINNER="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+  while [ $(ps -ef | grep -c ${PROC}) -ge 2 ]; do
     for (( i=0; i<${#SPINNER}; i++ )); do
       sleep 0.05
-      printf "${CL}${SPINNER:$i:1} ${task} ${msg}\r"
+      printf "${CL}${SPINNER:$i:1} ${2}\r"
     done
   done
-}
 
-msg="${2-InProgress}"
-task="${3-$1}"
-$1 & spinnersub "$task" "$msg"
-
-tput cnorm
-
+  tput cnorm
 } # end spinner
 
 # FUNCTION - checkjq
@@ -324,21 +312,14 @@ checkrequiredversionnative() {
 # FUNCTION - checkhealth
 checkhealth() {
   sleep 3
-  while true
-  do
-    tt=`kubectl get ${1} ${2} -ojson | jq -r '.status.'${3}''`
-    if [ "${tt}" == "${4}" ]; then
-      sleep 2
-      echo "${green}[DEBUG]${reset} ${2} ${1} is showing ${4} replicas ready${reset}"
-      echo ""
-      kubectl get ${1} ${2} | sed "s/^/                     /"
-      echo ""
-      break
-    else
-      echo "${red}[DEBUG]${reset} ${2} is starting. Checking again in 10 seconds.  If this does not finish in few minutes something is wrong. CTRL-C please"
-      spinner "sleep 10" "Sleeping" "Sleeping 10 seconds"
-    fi
-  done
+  echo ""
+  until [ "$(kubectl get ${1} ${2} -ojson | jq -r '.status.'${3}'')" == "${4}" ]; do
+    sleep 2
+  done &
+  spinner $! "${blue}[DEBUG]${reset} Checking to ensure all ${3}(${4}) are ready for ${2}.  IF this does not finish in ~5 minutes something is wrong"
+  echo ""
+  kubectl get ${1} ${2} | sed "s/^/                     /"
+  echo ""
 } # end checkhealth
 
 ############################################################
@@ -725,20 +706,13 @@ operator()
     fi
   fi
 
-  while true
-  do
-    if [ "`kubectl -n elastic-system get pod | grep elastic-operator | awk '{ print $3 }'`" = "Running" ]; then
-      echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} OPERATOR is ${green}HEALTHY${reset}"
-      echo ""
-      kubectl -n elastic-system get all | sed "s/^/                     /"
-      echo ""
-      break
-    else
-      echo "${red}[DEBUG]${reset} ECK Operator is starting.  Checking again in 10 seconds.  If the operator does not goto Running status in few minutes something is wrong. CTRL-C please"
-      sleep 10
-      echo ""
-    fi
-  done
+  until [ "$(kubectl -n elastic-system get pod | grep elastic-operator | awk '{ print $3 }')" = "Running" ]; do
+    sleep 2
+  done &
+  spinner $! "${blue}[DEBUG]${reset} Checking on the operator to become ready.  If this does not finish in ~5 minutes something is wrong"
+  echo ""
+  kubectl -n elastic-system get all | sed "s/^/                     /"
+
   
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} Creating license.yaml"
   # apply trial licence
@@ -1857,7 +1831,7 @@ EOF
   checkhealth "statefulset" "${1}-es-default" "readyReplicas" "3"
   checkhealth "deployment" "${1}-kb" "readyReplicas" "1"
 
-  createsummary "${1}"
+  createsummary ${1}
   echo ""
 
 # notes
@@ -1881,7 +1855,8 @@ fleet()
     kubectl patch kibana eck-lab --type merge -p '{"spec":{"config":{"xpack.fleet.agentPolicies":[{"id":"eck-fleet-server","is_default_fleet_server":true,"monitoring_enabled":["logs","metrics"],"name":"Fleet Server on ECK policy","namespace":"default","package_policies":[{"id":"fleet_server-1","name":"fleet_server-1","package":{"name":"fleet_server"}}]},{"id":"eck-agent","is_default":true,"monitoring_enabled":["logs","metrics"],"name":"Elastic Agent on ECK policy","namespace":"default","package_policies":[{"name":"system-1","package":{"name":"system"}},{"name":"kubernetes-1","package":{"name":"kubernetes"}}],"unenroll_timeout":900}],"xpack.fleet.agents.elasticsearch.host":"https://eck-lab-es-http.default.svc:9200","xpack.fleet.agents.fleet_server.hosts":["https://fleet-server-agent-http.default.svc:8220"],"xpack.fleet.packages":[{"name":"system","version":"latest"},{"name":"elastic_agent","version":"latest"},{"name":"fleet_server","version":"latest"},{"name":"kubernetes","version":"0.14.0"}]}}}'  > /dev/null 2>&1
   fi
   echo "${green}[DEBUG]${reset} Sleeping for 60 seconds to wait for kibana to be updated with the patch"
-  spinner "sleep 60" "Sleeping" "Sleeping 60 seconds waiting for kibana"
+  sleep 60 &
+  spinner $! "${blue}[DEBUG]${reset} Sleeping for 60 seconds waiting for kibana"
   echo ""
 
   # create fleet-server.yaml
@@ -2137,7 +2112,8 @@ EOF
 
   # checkfleethealth
   #checkhealth "agent" "elastic-agent"
-  sleep 30
+  sleep 30 &
+  spinner $! "${blue}[DEBUG]${reset} Sleeping for 30 seconds waiting for fleet"
 
   # get fleet url
   unset FLEETIP
@@ -2155,7 +2131,8 @@ EOF
   if [ $(checkversion $VERSION) -ge $(checkversion "8.2.0") ]; then
 
     echo "${green}[DEBUG]${reset} Waiting 30 seconds for fleet server to calm down to set the external output"
-    spinner "sleep 30" "Sleeping" "Sleeping 30 seconds waiting for fleet server"
+    sleep 30 &
+    spinner $! "${blue}[DEBUG]${reset} Sleeping for 30 seconds waiting for fleet server"
 
     echo "${green}[DEBUG]${reset} Setting Fleet Server URL"
 
@@ -2244,7 +2221,8 @@ EOF
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.2.0") ]; then
     
     echo "${green}[DEBUG]${reset} Waiting 30 seconds for fleet server to calm down to set the output"
-    spinner "sleep 30" "Sleeping" "Sleeping 30 seconds waiting for fleet server"
+    sleep 30 &
+    spinner $! "${blue}[DEBUG]${reset} Sleeping for 30 seconds waiting for fleet server"
 
     generate_post_data()
     {
