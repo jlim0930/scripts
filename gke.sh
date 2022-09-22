@@ -3,7 +3,7 @@
 ## Creates a GKE cluster
 # ------- EDIT information below to customize for your needs
 gke_cluster_name="justinlim-gke"          # name of your k8s cluster
-gke_project="xxxxxxxxxxxxxxxx"     # project that you are linked to
+gke_project="elastic-support-k8s-dev"     # project that you are linked to
 
 #gke_zone="us-central1-c"                  # zone
 gke_region="us-central1"                  # region
@@ -76,16 +76,23 @@ start() {
   echo "${green}[DEBUG]${reset} Creating cluster ${gke_cluster_name}"
   echo ""
 
-#  gcloud container clusters create ${gke_cluster_name} --project ${gke_project} --region ${gke_region} --num-nodes=${gke_cluster_nodes} --machine-type=${gke_machine_type} --image-type="COS_CONTAINERD"
-  gcloud container clusters create ${gke_cluster_name} \
-	  --project ${gke_project} \
-	  --region ${gke_region} \
-	  --num-nodes=${gke_cluster_nodes} \
-	  --machine-type=${gke_machine_type} \
-	  --disk-type=pd-ssd \
-	  --image-type="COS_CONTAINERD" \
-	  --release-channel stable \
-	  --enable-autoscaling --min-nodes "0" --max-nodes "3"
+  gcloud container clusters create "${gke_cluster_name}" \
+    --project "${gke_project}" \
+    --region "${gke_region}" \
+    --num-nodes "${gke_cluster_nodes}" \
+    --machine-type "${gke_machine_type}" \
+    --disk-type "pd-ssd" \
+    --disk-size "100" \
+    --image-type "COS_CONTAINERD" \
+    --release-channel "stable" \
+    --max-pods-per-node "110" \
+    --enable-ip-alias \
+    --enable-autoscaling \
+    --min-nodes "0" \
+    --max-nodes "${gke_cluster_nodes}" \
+    --addons HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
+    --autoscaling-profile optimize-utilization \
+    --enable-autorepair
 
   echo ""
   echo "${green}[DEBUG]${reset} Configure kubectl context for ${gke_cluster_name}"
