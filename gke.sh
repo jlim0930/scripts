@@ -88,8 +88,8 @@ start() {
     --max-pods-per-node "110" \
     --enable-ip-alias \
     --enable-autoscaling \
-    --min-nodes "0" \
-    --max-nodes "${gke_cluster_nodes}" \
+    --min-nodes "1" \
+    --max-nodes "2" \
     --addons HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
     --autoscaling-profile optimize-utilization \
     --enable-autorepair
