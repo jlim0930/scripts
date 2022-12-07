@@ -7,7 +7,7 @@ gke_project="elastic-support-k8s-dev"     # project that you are linked to
 
 #gke_zone="us-central1-c"                  # zone
 gke_region="us-central1"                  # region
-gke_cluster_nodes="1"                     # number of nodes per az
+gke_cluster_nodes="1"                     # number of cluster
 gke_machine_type="e2-standard-4"          # node machine type
 # gke_cluster_node_vCPUs="4"               # vCPUs for node
 # gke_cluster_node_RAM="16384"
@@ -77,21 +77,27 @@ start() {
   echo ""
 
   gcloud container clusters create "${gke_cluster_name}" \
-    --project="${gke_project}" \
-    --region="${gke_region}" \
-    --num-nodes="${gke_cluster_nodes}" \
-    --machine-type="${gke_machine_type}" \
-    --disk-type="pd-ssd" \
-    --disk-size="100" \
-    --image-type="COS_CONTAINERD" \
-    --release-channel="stable" \
-    --max-pods-per-node="110" \
+    --project "${gke_project}" \
+    --region "${gke_region}" \
+    --num-nodes "${gke_cluster_nodes}" \
+    --machine-type "${gke_machine_type}" \
+    --disk-type "pd-ssd" \
+    --disk-size "100" \
+    --image-type "COS_CONTAINERD" \
+    --release-channel "stable" \
+    --max-pods-per-node "110" \
     --enable-ip-alias \
+    --enable-autoscaling \
+    --min-nodes "1" \
+    --max-nodes "2" \
+    --addons HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
+    --autoscaling-profile optimize-utilization \
     --enable-autorepair
 
   echo ""
   echo "${green}[DEBUG]${reset} Configure kubectl context for ${gke_cluster_name}"
-  gcloud container clusters get-credentials ${gke_cluster_name} --region=${gke_region} --project=${gke_project}
+  gcloud container clusters get-credentials ${gke_cluster_name} --region ${gke_region}  --project ${gke_project}
+
   echo "${green}[DEBUG]${reset} Adding gcloud RBAC for cluster admin role"
   kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
 } # end start
@@ -99,14 +105,11 @@ start() {
 # delete | cleanup
 delete() {
   if [ $(gcloud container clusters list 2> /dev/null --project ${gke_project} | grep ${gke_cluster_name} | wc -l) -gt 0 ]; then
-    echo "${green}[DEBUG]${reset} Remove kubectl context"
-    # kubectl config unset contexts.${gke_cluster_name}
-    kubectl config unset current-context
-    kubectl config delete-context gke_${gke_project}_${gke_region}_${gke_cluster_name}
-
     echo "${green}[DEBUG]${reset} Deleting ${gke_cluster_name}"
-    gcloud container clusters delete ${gke_cluster_name} --project=${gke_project} --region=${gke_region} --quiet;
+    gcloud container clusters delete ${gke_cluster_name} --project ${gke_project} --region ${gke_region} --quiet;
 
+    echo "${green}[DEBUG]${reset} Remove kubectl context"
+    kubectl config unset contexts.${gke_cluster_name}
   else 
     echo "${red}[DEBUG]${reset} Cluster ${gke_cluster_name} not found"
   fi
