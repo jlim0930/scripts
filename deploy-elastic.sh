@@ -100,7 +100,7 @@ spinner() {
   done
 
   tput cnorm
-}
+} # end spinner
 
 # check for version and make sure its [6..8].x.x and assign MAJOR MINOR BUGFIX number
 version() {
@@ -238,8 +238,8 @@ pullimage() {
 # cleanup deployment
 cleanup() {
   echo "${green}********** Cleaning up **********${reset}"
-  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 ldap >/dev/null 2>&1
-  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 ldap >/dev/null 2>&1
+  docker stop es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 es-setup-1 ldap >/dev/null 2>&1
+  docker rm es01 es02 es03 kibana metricbeat filebeat apm entsearch minio01 fleet es_mc_1 es_wait_until_ready_1 apm es_setup_1 es-setup-1 ldap >/dev/null 2>&1
   docker network rm es_default >/dev/null 2>&1
   docker volume rm es_data01 >/dev/null 2>&1
   docker volume rm es_data02 >/dev/null 2>&1
@@ -2282,6 +2282,7 @@ services:
     ports:
       - 8220:8220
       - 6791:6791
+      - 8200:8200
     restart: on-failure
     volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
 
