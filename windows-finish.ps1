@@ -4,126 +4,6 @@
 #
 
 
-$VerbosePreference = "Continue"
-
-function Install-ScoopApp {
-    param (
-        [string]$Package
-    )
-    Write-Verbose -Message "Preparing to install $Package"
-    if (! (scoop info $Package).Installed ) {
-        Write-Verbose -Message "Installing $Package"
-        scoop install $Package
-    } else {
-        Write-Verbose -Message "Package $Package already installed! Skipping..."
-    }
-}
-
-function Install-WinGetApp {
-    param (
-        [string]$PackageID
-    )
-    Write-Verbose -Message "Preparing to install $PackageID"
-    # Added accept options based on this issue - https://github.com/microsoft/winget-cli/issues/1559
-    #$listApp = winget list --exact -q $PackageID --accept-source-agreements
-    #if (winget list --exact --id "$PackageID" --accept-source-agreements) {
-    #    Write-Verbose -Message "Package $PackageID already installed! Skipping..."
-    #} else {
-    #    Write-Verbose -Message "Installing $Package"
-    #    winget install --silent --id "$PackageID" --accept-source-agreements --accept-package-agreements
-    #}
-    Write-Verbose -Message "Installing $Package"
-    winget install --silent --id "$PackageID" --accept-source-agreements --accept-package-agreements
-}
-
-function Extract-Download {
-    param (
-        [string]$Folder,
-        [string]$File
-    )
-    if (!(Test-Path -Path "$Folder" -PathType Container)) {
-        Write-Error "$Folder does not exist!!!"
-        Break
-    }
-    if (Test-Path -Path "$File" -PathType Leaf) {
-        switch ($File.Split(".") | Select-Object -Last 1) {
-            "rar" { Start-Process -FilePath "UnRar.exe" -ArgumentList "x","-op'$Folder'","-y","$File" -WorkingDirectory "$Env:ProgramFiles\WinRAR\" -Wait | Out-Null }
-            "zip" { 7z x -o"$Folder" -y "$File" | Out-Null }
-            "7z" { 7z x -o"$Folder" -y "$File" | Out-Null }
-            "exe" { 7z x -o"$Folder" -y "$File" | Out-Null }
-            Default { Write-Error "No way to Extract $File !!!"; Break }
-        }
-    }
-}
-
-function Download-CustomApp {
-    param (
-        [string]$Link,
-        [string]$Folder
-    )
-    if ((curl -sIL "$Link" | Select-String -Pattern "Content-Disposition") -ne $Null) {
-        $Package = $(curl -sIL "$Link" | Select-String -Pattern "filename=" | Split-String -Separator "=" | Select-Object -Last 1).Trim('"')
-    } else {
-        $Package = $Link.split("/") | Select-Object -Last 1
-    }
-    Write-Verbose -Message "Preparing to download $Package"
-    aria2c --quiet --dir="$Folder" "$Link"
-    Return $Package
-}
-
-function Install-CustomApp {
-    param (
-        [string]$URL,
-        [string]$Folder
-    )
-    $Package = Download-CustomApp -Link $URL -Folder "$Env:UserProfile\Downloads\"
-    if (Test-Path -Path "$Env:UserProfile\Downloads\$Package" -PathType Leaf) {
-        if (Test-Path Variable:Folder) {
-            if (!(Test-Path -Path "$Env:UserProfile\bin\$Folder")) {
-                New-Item -Path "$Env:UserProfile\bin\$Folder" -ItemType Directory | Out-Null
-            }
-            Extract-Download -Folder "$Env:UserProfile\bin\$Folder" -File "$Env:UserProfile\Downloads\$Package"
-        } else {
-            Extract-Download -Folder "$Env:UserProfile\bin\" -File "$Env:UserProfile\Downloads\$Package"
-        }
-        Remove-Item -Path "$Env:UserProfile\Downloads\$Package"
-    }
-}
-
-function Install-CustomPackage {
-    param (
-        [string]$URL
-    )
-    $Package = Download-CustomApp -Link $URL
-    if (Test-Path -Path "$Env:UserProfile\Downloads\$Package" -PathType Leaf) {
-        Start-Process -FilePath ".\$Package" -ArgumentList "/S" -WorkingDirectory "${Env:UserProfile}\Downloads\" -Verb RunAs -Wait #-WindowStyle Hidden
-        Remove-Item -Path "$Env:UserProfile\Downloads\$Package"
-    }
-}
-
-function Remove-InstalledApp {
-    param (
-        [string]$Package
-    )
-    Write-Verbose -Message "Uninstalling: $Package"
-    Start-Process -FilePath "PowerShell" -ArgumentList "Get-AppxPackage","-AllUsers","-Name","'$Package'" -Verb RunAs -WindowStyle Hidden
-}
-
-function Enable-Bucket {
-    param (
-        [string]$Bucket
-    )
-    if (!($(scoop bucket list).Name -eq "$Bucket")) {
-        Write-Verbose -Message "Adding Bucket $Bucket to scoop..."
-        scoop bucket add $Bucket
-    } else {
-        Write-Verbose -Message "Bucket $Bucket already added! Skipping..."
-    }
-}
-
-
-###############################
-
 # Configure ExecutionPolicy to Unrestricted for CurrentUser Scope
 if ((Get-ExecutionPolicy -Scope CurrentUser) -notcontains "Unrestricted") {
     Write-Verbose -Message "Setting Execution Policy for Current User..."
@@ -133,37 +13,89 @@ if ((Get-ExecutionPolicy -Scope CurrentUser) -notcontains "Unrestricted") {
     Break
 }
 
-# Install Scoop, if not already installed
-#$scoopInstalled = Get-Command "scoop"
-if ( !(Get-Command -Name "scoop" -CommandType Application -ErrorAction SilentlyContinue | Out-Null) ) {
-    Write-Verbose -Message "Installing Scoop..."
-    iex ((New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh'))
+# Debloat windows
+function Debloat-Windows {
+	Param(
+		[Parameter(Mandatory=$true,Position=0)] [String]$ProgramName
+	)
+	Get-AppxPackage -name $ProgramName | Remove-AppxPackage
+}
+$bloat_apps = "Microsoft.ZuneMusic", 
+"Microsoft.Music.Preview", 
+"Microsoft.XboxGameCallableUI", 
+"Microsoft.XboxIdentityProvider", 
+"Microsoft.BingTravel", 
+"Microsoft.BingHealthAndFitness", 
+"Microsoft.BingFoodAndDrink", 
+"Microsoft.People", 
+"Microsoft.BingFinance", 
+"Microsoft.3DBuilder", 
+"Microsoft.BingNews", 
+"Microsoft.XboxApp", 
+"Microsoft.BingSports", 
+"Microsoft.WindowsCamera", 
+"Microsoft.Getstarted", 
+"Microsoft.Office.OneNote", 
+"Microsoft.WindowsMaps", 
+"Microsoft.MicrosoftSolitaireCollection", 
+"Microsoft.MicrosoftOffi1ceHub", 
+"Microsoft.BingWeather", 
+"Microsoft.BioEnrollment", 
+"Microsoft.WindowsStore", 
+"Microsoft.WindowsPhone",
+"Microsoft.GetHelp",
+"Microsoft.Messaging",
+"Microsoft.Microsoft3DViewer",
+"Microsoft.MicrosoftOfficeHub",
+"Microsoft.NetworkSpeedTest",
+"Microsoft.News",
+"Microsoft.Office.Lens",
+"Microsoft.Office.Sway",
+"Microsoft.OneConnect",
+"Microsoft.Print3D",
+"Microsoft.SkypeApp",
+"Microsoft.StorePurchaseApp",
+"Microsoft.Office.Todo.List",
+"Microsoft.Whiteboard",
+"Microsoft.WindowsAlarms",
+"microsoft.windowscommunicationsapps",
+"Microsoft.WindowsFeedbackHub",
+"Microsoft.WindowsSoundRecorder",
+"Microsoft.Xbox.TCUI",
+"Microsoft.XboxGameOverlay",
+"Microsoft.XboxSpeechToTextOverlay",
+"Microsoft.ZuneVideo",
+"*EclipseManager*",
+"*ActiproSoftwareLLC*",
+"*AdobeSystemsIncorporated.AdobePhotoshopExpress*",
+"*Duolingo-LearnLanguagesforFree*",
+"*PandoraMediaInc*",
+"*CandyCrush*",
+"*BubbleWitch3Saga*",
+"*Wunderlist*",
+"*Flipboard*",
+"*Twitter*",
+"*Facebook*",
+"*Spotify*",
+"*Minecraft*",
+"*Royal Revolt*",
+"*Sway*",
+"*Speed Test*",
+"*Dolby*"
+
+foreach ($bloat_app in $bloat_apps)
+{
+	Write-Host $bloat_app
+	Debloat-Windows $bloat_app
 }
 
-# Install WinGet, if not already installed
-# From crutkas's gist - https://gist.github.com/crutkas/6c2096eae387e544bd05cde246f23901
-#$hasPackageManager = Get-AppPackage -name "Microsoft.DesktopAppInstaller"
-if (!(Get-AppPackage -name "Microsoft.DesktopAppInstaller")) {
-    Write-Verbose -Message "Installing WinGet..."
-@'
-# Set URL and Enable TLSv12
-$releases_url = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-# Dont Think We Need This!!!
-#Install-PackageProvider -Name NuGet
-# Install Nuget as Package Source Provider
-Register-PackageSource -Name Nuget -Location "http://www.nuget.org/api/v2" -ProviderName Nuget -Trusted
-# Install Microsoft.UI.Xaml (This is not currently working!!!)
-Install-Package Microsoft.UI.Xaml -RequiredVersion 2.7.1
-# Grab "Latest" release
-$releases = Invoke-RestMethod -uri $releases_url
-$latestRelease = $releases.assets | Where { $_.browser_download_url.EndsWith('msixbundle') } | Select -First 1
-# Install Microsoft.DesktopAppInstaller Package
-Add-AppxPackage -Path $latestRelease.browser_download_url
-'@ > $Env:Temp\winget.ps1
-    Start-Process -FilePath "PowerShell" -ArgumentList "$Env:Temp\winget.ps1" -Verb RunAs -Wait
-    Remove-Item -Path $Env:Temp\winget.ps1 -Force
-}
+# install scoop
+irm get.scoop.sh | iex
+scoop install sudo
+sudo scoop 7zip -g
+
+# install winget
+Add-AppxPackage -Path 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
 
 # Only install OpenSSH Package, if not on Windows 10
 if ([Environment]::OSVersion.Version.Major -lt 10) {
@@ -195,13 +127,6 @@ if ((Get-Service -Name ssh-agent).Status -ne "Running") {
     Start-Process -FilePath "PowerShell" -ArgumentList "Set-Service","ssh-agent","-StartupType","Manual" -Verb RunAs -Wait -WindowStyle Hidden
 }
 
-# Add Buckets
-Enable-Bucket -Bucket "extras"
-Enable-Bucket -Bucket "java"
-Enable-Bucket -Bucket "nirsoft"
-Enable-Bucket -Bucket "nonportable"
-Enable-Bucket -Bucket "nerd-fonts"
-
 # Set Timezone
 Set-TimeZone -Name "Central Standard Time"
 
@@ -213,69 +138,55 @@ Install-Language ko-KR -AsJob
 [Environment]::SetEnvironmentVariable("TMP", "C:\temptemp", "User")
 
 # Change System variables
-[Environment]::SetEnvironmentVariable("TMP", "C:\temptemp", "Machine")
-[Environment]::SetEnvironmentVariable("TEMP", "C:\temptemp", "Machine")
+sudo [Environment]::SetEnvironmentVariable("TMP", "C:\temptemp", "Machine")
+sudo [Environment]::SetEnvironmentVariable("TEMP", "C:\temptemp", "Machine")
 
-# Install Scoop Packages
-$Scoop = @(
-    "scoop-tray",
-    "curl",
-    "sudo",
-    "putty",
-    "rufus",
-    "brave",
-    "firefox",
-    "mobaxterm",
-    "totalcommander",
-    "bitwarden",
-    "sharex",
-    "k-lite-codec-pack-standard-np",
-    "winrar",
-    "vlc",
-    "revouninstaller",
-    "fixit-pdf-reader",
-    "unlocker",
-    "winaero-tweaker",
-    "Noto-CJK-Mega-OTC",
-    "ffmpeg",
-    "musicbee",
-    "mp3tag",
-    "spotify",
-    "clink",
-    "powertoys",
-    "vscode",
-    "notepadplusplus",
-    "sysinternals")
-foreach ($item in $Scoop) {
-    Install-ScoopApp -Package "$item"
-}
+# scoop stuff
+scoop install curl grep sed less touch
 
-# Fix for vscode and notepad++
+# Add Buckets
+scoop bucket add extras
+scoop bucket add nonportable
+scoop bucket add java
+scoop bucket add nerd-fonts
+scoop bucket add nirsoft
+
+# scoop packages
+scoop install firefox
+scoop install brave
+scoop install mobaxterm
+scoop install putty
+scoop install totalcommander
+scoop install bitwarden
+scoop install sharex
+scoop install vscode
 reg import "C:\Users\$env:USERNAME\scoop\apps\vscode\current\install-associations.reg"
+scoop install notepadplusplus
 reg import "C:\Users\$env:USERNAME\scoop\apps\notepadplusplus\current\install-context.reg"
+scoop install k-lite-codec-pack-standard-np
+scoop install winrar
+scoop install vlc
+scoop install revo
+scoop install revouninstaller
+scoop install spotify
+scoop install foxit-pdf-reader
+scoop install unlocker
+scoop install winaero-tweaker
+scoop install powertoys
+scoop install Noto-CJK-Mega-OTC
+scoop isntall clink
+scoop install sysinternals
 
+# winget packages
+winget install --id="AOMEI.PartitionAssistant"  -e
+winget install --id="Microsoft.DotNet.DesktopRuntime.3_1" -e
+winget install --id="Microsoft.DotNet.DesktopRuntime.5" -e
+winget install --id="Microsoft.DotNet.DesktopRuntime.6" -e
+winget install --id="Microsoft.DotNet.DesktopRuntime.7" -e
+winget install --id="Google.Chrome" -e
 
-# Install winget Packages
-$WinGet = @(
-    #"Microsoft.dotNetFramework",
-    "Microsoft.DotNet.DesktopRuntime.3_1",
-    "Microsoft.DotNet.DesktopRuntime.5",
-    "Microsoft.DotNet.DesktopRuntime.6",
-    "Microsoft.DotNet.DesktopRuntime.7",
-    "Google.Chrome",
-    "AOMEI.PartitionAssistant"
-    )
-foreach ($item in $WinGet) {
-    Install-WinGetApp -PackageID "$item"
-}
-
-# Install Windows SubSystems for Linux
-$wslInstalled = Get-Command "wsl" -CommandType Application -ErrorAction Ignore
-if (!$wslInstalled) {
-    Write-Verbose -Message "Installing Windows SubSystems for Linux..."
-    Start-Process -FilePath "PowerShell" -ArgumentList "wsl","--install" -Verb RunAs -Wait -WindowStyle Hidden
-}
-
+# wsl
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
 scoop bucket add wsl https://github.com/KNOXDEV/wsl
 
 
