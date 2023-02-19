@@ -13,82 +13,6 @@ if ((Get-ExecutionPolicy -Scope CurrentUser) -notcontains "Unrestricted") {
     Break
 }
 
-# Debloat windows
-function Debloat-Windows {
-	Param(
-		[Parameter(Mandatory=$true,Position=0)] [String]$ProgramName
-	)
-	Get-AppxPackage -name $ProgramName | Remove-AppxPackage
-}
-$bloat_apps = "Microsoft.ZuneMusic", 
-"Microsoft.Music.Preview", 
-"Microsoft.XboxGameCallableUI", 
-"Microsoft.XboxIdentityProvider", 
-"Microsoft.BingTravel", 
-"Microsoft.BingHealthAndFitness", 
-"Microsoft.BingFoodAndDrink", 
-"Microsoft.People", 
-"Microsoft.BingFinance", 
-"Microsoft.3DBuilder", 
-"Microsoft.BingNews", 
-"Microsoft.XboxApp", 
-"Microsoft.BingSports", 
-"Microsoft.WindowsCamera", 
-"Microsoft.Getstarted", 
-"Microsoft.Office.OneNote", 
-"Microsoft.WindowsMaps", 
-"Microsoft.MicrosoftSolitaireCollection", 
-"Microsoft.MicrosoftOffi1ceHub", 
-"Microsoft.BingWeather", 
-"Microsoft.BioEnrollment", 
-"Microsoft.WindowsStore", 
-"Microsoft.WindowsPhone",
-"Microsoft.GetHelp",
-"Microsoft.Messaging",
-"Microsoft.Microsoft3DViewer",
-"Microsoft.MicrosoftOfficeHub",
-"Microsoft.NetworkSpeedTest",
-"Microsoft.News",
-"Microsoft.Office.Lens",
-"Microsoft.Office.Sway",
-"Microsoft.OneConnect",
-"Microsoft.Print3D",
-"Microsoft.SkypeApp",
-"Microsoft.StorePurchaseApp",
-"Microsoft.Office.Todo.List",
-"Microsoft.Whiteboard",
-"Microsoft.WindowsAlarms",
-"microsoft.windowscommunicationsapps",
-"Microsoft.WindowsFeedbackHub",
-"Microsoft.WindowsSoundRecorder",
-"Microsoft.Xbox.TCUI",
-"Microsoft.XboxGameOverlay",
-"Microsoft.XboxSpeechToTextOverlay",
-"Microsoft.ZuneVideo",
-"*EclipseManager*",
-"*ActiproSoftwareLLC*",
-"*AdobeSystemsIncorporated.AdobePhotoshopExpress*",
-"*Duolingo-LearnLanguagesforFree*",
-"*PandoraMediaInc*",
-"*CandyCrush*",
-"*BubbleWitch3Saga*",
-"*Wunderlist*",
-"*Flipboard*",
-"*Twitter*",
-"*Facebook*",
-"*Spotify*",
-"*Minecraft*",
-"*Royal Revolt*",
-"*Sway*",
-"*Speed Test*",
-"*Dolby*"
-
-foreach ($bloat_app in $bloat_apps)
-{
-	Write-Host $bloat_app
-	Debloat-Windows $bloat_app
-}
-
 # install scoop
 irm get.scoop.sh | iex
 scoop install sudo
@@ -112,20 +36,8 @@ Start-Process -FilePath "PowerShell" -ArgumentList "${Env:Temp}\openssh.ps1" -Ve
 Remove-Item -Path "${Env:Temp}\openssh.ps1" -Force
 
 # Configure git
-Install-WinGetApp -PackageID "Git.Git"
-Start-Sleep -Seconds 5
-refreshenv
-Start-Sleep -Seconds 5
-if (!$(git config --global credential.helper) -eq "manager-core") {
-    git config --global credential.helper manager-core
-}
-if (!($Env:GIT_SSH)) {
-    Write-Verbose -Message "Setting GIT_SSH User Environment Variable"
-    [System.Environment]::SetEnvironmentVariable('GIT_SSH', (Resolve-Path (scoop which ssh)), 'USER')
-}
-if ((Get-Service -Name ssh-agent).Status -ne "Running") {
-    Start-Process -FilePath "PowerShell" -ArgumentList "Set-Service","ssh-agent","-StartupType","Manual" -Verb RunAs -Wait -WindowStyle Hidden
-}
+scoop install git
+reg import "C:\Users\$env:USERNAME\scoop\apps\7zip\current\install-context.reg"
 
 # Set Timezone
 Set-TimeZone -Name "Central Standard Time"
