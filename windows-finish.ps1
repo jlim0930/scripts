@@ -16,10 +16,12 @@ if ((Get-ExecutionPolicy -Scope CurrentUser) -notcontains "Unrestricted") {
 # install scoop
 irm get.scoop.sh | iex
 scoop install sudo
-sudo scoop 7zip -g
 
-# install winget
-Add-AppxPackage -Path 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
+# install winget 
+$wingetlink = 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
+Invoke-WebRequest -Uri $wingetlink -Outfile winget-installer.msixbundle
+.\winget-installer.msxibundle
+Start-Sleep -Seconds 15
 
 # Only install OpenSSH Package, if not on Windows 10
 if ([Environment]::OSVersion.Version.Major -lt 10) {
@@ -36,8 +38,9 @@ Start-Process -FilePath "PowerShell" -ArgumentList "${Env:Temp}\openssh.ps1" -Ve
 Remove-Item -Path "${Env:Temp}\openssh.ps1" -Force
 
 # Configure git
-scoop install git
+scoop install 7zip git
 reg import "C:\Users\$env:USERNAME\scoop\apps\7zip\current\install-context.reg"
+
 
 # Set Timezone
 Set-TimeZone -Name "Central Standard Time"
