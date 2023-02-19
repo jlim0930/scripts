@@ -20,8 +20,8 @@ scoop install sudo
 # install winget 
 $wingetlink = 'https://github.com/microsoft/winget-cli/releases/latest/download/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle'
 Invoke-WebRequest -Uri $wingetlink -Outfile winget-installer.msixbundle
-.\winget-installer.msxibundle
-Start-Sleep -Seconds 15
+.\winget-installer.msixbundle
+Start-Sleep -Seconds 60
 
 # Only install OpenSSH Package, if not on Windows 10
 if ([Environment]::OSVersion.Version.Major -lt 10) {
@@ -81,7 +81,6 @@ reg import "C:\Users\$env:USERNAME\scoop\apps\notepadplusplus\current\install-co
 scoop install k-lite-codec-pack-standard-np
 scoop install winrar
 scoop install vlc
-scoop install revo
 scoop install revouninstaller
 scoop install spotify
 scoop install foxit-pdf-reader
