@@ -313,7 +313,7 @@ checkrequiredversionnative() {
 checkhealth() {
   sleep 3
   echo ""
-  until [ "$(kubectl get ${1} ${2} -ojson | jq -r '.status.'${3}'')" == "${4}" ]; do
+  until [ "$(kubectl get ${1} ${2} -ojson 2>/dev/null | jq -r '.status.'${3}'')" == "${4}" ]; do
     sleep 2
   done &
   spinner $! "${blue}[DEBUG]${reset} Checking to ensure all ${3}(${4}) are ready for ${2}.  IF this does not finish in ~5 minutes something is wrong"
@@ -593,6 +593,9 @@ cleanup()
     if [ -e ${WORKDIR}/openldap.yaml ]; then
       kubectl delete -f ${WORKDIR}/openldap.yaml >/dev/null 2>&1
       kubectl delete secret openldap openldap-certificates ldapbindpw-secret >/dev/null 2>&1
+    fi
+    if [ -e ${WORKDIR}/apmserver.yaml ]; then
+      kubectl delete -f ${WORKDIR}/apmserver.yaml >/dev/null 2>&1
     fi
   elif [ -e ${WORKDIR}/HELM ]; then
     echo "${green}[DEBUG]${reset} DELETING Resources for: ${blue}helm-lab elasticsearch${reset}"
@@ -1839,6 +1842,77 @@ EOF
 #
 
 } # end monitor2
+
+# FUNCTION - apm
+eckapm() {
+  
+  echo "${green}[DEBUG]${reset} Adding APM Server to the default stack"
+  echo ""
+
+  touch ${WORKDIR}/ECKAPM
+  
+  sleep 5
+  echo "${green}[DEBUG]${reset} Creating patch for kibana to install the APM assets(Fleet)"
+  cat > ${WORKDIR}/kibana-eck-lab-patch.yaml <<EOF
+spec:
+  config:
+    xpack.fleet.packages:
+    - name: apm
+      version: latest
+EOF
+
+  echo "${green}[DEBUG]${reset} Applying the patch to eck-lab."
+  kubectl patch kibana eck-lab --type merge --patch-file ${WORKDIR}/kibana-eck-lab-patch.yaml >/dev/null 2>&1
+  sleep 2
+
+  echo "${green}[DEBUG]${reset} Creating apmserver.yaml"
+  cat > ${WORKDIR}/apmserver.yaml<<EOF
+---
+apiVersion: apm.k8s.elastic.co/v1
+kind: ApmServer
+metadata:
+  name: ${1}
+spec:
+  version: ${VERSION}
+  count: 1
+  elasticsearchRef:
+    name: "${1}"
+  # this allows ECK to configure automatically the Kibana endpoint as described in https://www.elastic.co/guide/en/apm/server/current/setup-kibana-endpoint.html
+  kibanaRef:
+    name: "${1}"
+  http:
+    service:
+      spec:
+        type: LoadBalancer
+EOF
+
+  echo "${green}[DEBUG]${reset} Creating APM Server"
+  kubectl apply -f ${WORKDIR}/apmserver.yaml >/dev/null 2>&1
+
+  sleep 5
+
+
+  echo "${green}[DEBUG]${red} Patching kibana takes a while so please ensure that all kb pods have been recreated before trying to access APM${reset}"
+
+  unset APMIP
+  c=0
+  while [ "${APMIP}" = "" -o "${APMIP}" = "<pending>" ]
+    do
+      APMIP=`kubectl get service | grep ${1}-apm-http | awk '{ print $4 }'`
+      sleep 1
+      ((C++))
+      if [ $c = 30 ]; then
+        echo "${red}[DEBUG]${reset} Unable to get APM endpoint"
+        exit
+      fi
+    done
+    spinner $! "${blue}[DEBUG]${reset} Waiting for lb IP assignment for APM Server".
+    APMIP=`kubectl get service | grep ${1}-apm-http | awk '{ print $4 }'`
+    
+    echo "${green}[DEBUG]${reset} Grabbed APM endpoint for ${1}: ${blue}https://${APMIP}:8200${reset}"
+    echo "${1} APM endpoint: https://${APMIP}:8200" >> notes
+
+} # end eckapm
 
 # FUNCTION - fleet
 fleet()
@@ -4824,6 +4898,27 @@ case ${1} in
       monitor2 "eck-lab"
       summary
     fi
+    ;;
+  eckapm)
+    if [ -z ${2} -o -z ${3} ]; then
+      help
+      exit
+    fi
+    VERSION=${2}
+    ECKVERSION=${2}
+    checkjq
+    checkdocker
+    checkkubectl
+    checkopenssl
+    VERSION=${2}
+    ECKVERSION=${3}
+    checkcontainerimage "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
+    checkrequiredversion
+    checkdir
+    operator
+    stackbuild "eck-lab"
+    eckapm "eck-lab"
+    summary
     ;;
   fleet)
     if [ -z ${2} -o -z ${3} ]; then
