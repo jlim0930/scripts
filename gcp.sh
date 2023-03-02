@@ -7,12 +7,12 @@ gcp_name="justinlim-lab"        # name of the compute instance stood up
 
 ##############################################################################
 
-gcp_project="xxxxxxxxxxxxx"   # project that you have access to to stand up the compute instance
+gcp_project="elastic-support"   # project that you have access to to stand up the compute instance
 gcp_zone="us-central1-a"        # GCP zone - select one that is close to you
 machine_type="e2-standard-4"    # GCP machine type - gcloud compute machine-types list
 #boot_disk_size="50"             # boot disk size
 boot_disk_type="pd-ssd"         # disk type -  gcloud compute disk-types list
-
+label="division=support,org=support,team=support,project=justinlim"
 
 # -------- do not edit below
 
@@ -47,6 +47,7 @@ create()
   find_image ${1}
   
   gcloud compute instances create ${gcp_name} \
+      --labels ${label} \
       --project=${gcp_project} \
       --zone=${gcp_zone} \
       --machine-type=${machine_type} \
