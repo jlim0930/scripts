@@ -78,7 +78,7 @@ start() {
   echo ""
 
   gcloud container clusters create "${gke_cluster_name}" \
-    --labels ${label} \
+    --labels=${label} \
     --project="${gke_project}" \
     --region="${gke_region}" \
     --num-nodes="${gke_cluster_nodes}" \
