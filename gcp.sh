@@ -5,7 +5,7 @@
 # ------- EDIT information below to customize for your needs
 gcp_name="justinlim-lab"        # name of the compute instance stood up
 
-##############################################################################
+## EDIT ############################################################################
 
 gcp_project="elastic-support"   # project that you have access to to stand up the compute instance
 gcp_zone="us-central1-a"        # GCP zone - select one that is close to you
