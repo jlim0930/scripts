@@ -1,7 +1,6 @@
 #!/bin/bash
 
 ## Creates a GKE cluster
-#
 # ------- EDIT information below to customize for your needs
 gke_cluster_name="justinlim-gke"          # name of your k8s cluster
 gke_project="elastic-support-k8s-dev"     # project that you are linked to
