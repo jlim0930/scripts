@@ -2174,7 +2174,7 @@ fleet() {
 
   # get IP
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    IP=`ip route get 1 | awk '{print $NF;exit}'`
+    IP=`ip route get 8.8.8.8 | head -1 | cut -d' ' -f7`
     echo "${green}[DEBUG]${reset} OS: LINUX   IP found: ${IP}"
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'| tail -n1`
