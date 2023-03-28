@@ -11,7 +11,7 @@ gke_cluster_nodes="1"                     # number of nodes per az
 gke_machine_type="e2-standard-4"          # node machine type
 # gke_cluster_node_vCPUs="4"               # vCPUs for node
 # gke_cluster_node_RAM="16384"
-label="division=support,org=support,team=support,project=justinlim"
+label="division=support,org=support,team=support,project=${gke_cluster_name}"
 
 # -------- do not edit below
 
