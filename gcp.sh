@@ -5,14 +5,14 @@
 # ------- EDIT information below to customize for your needs
 gcp_name="justinlim-lab"        # name of the compute instance stood up
 
-## EDIT ############################################################################
+##############################################################################
 
 gcp_project="elastic-support"   # project that you have access to to stand up the compute instance
 gcp_zone="us-central1-a"        # GCP zone - select one that is close to you
 machine_type="e2-standard-4"    # GCP machine type - gcloud compute machine-types list
 #boot_disk_size="50"             # boot disk size
 boot_disk_type="pd-ssd"         # disk type -  gcloud compute disk-types list
-label="division=support,org=support,team=support,project=justinlim"
+label="division=support,org=support,team=support,project=${gcp_name}"
 
 # -------- do not edit below
 
