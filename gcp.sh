@@ -3,7 +3,9 @@
 ## Creates GCP instances
 
 # --------------EDIT information below
+
 gcp_name="justinlim-lab"
+
 ##############################
 gcp_project="elastic-support"
 gcp_zone="us-central1-a"        # GCP zone - select one that is close to you
@@ -76,7 +78,7 @@ wait_vm_up() {
 # find
 find() {
   # finds the info for your compute instance
-  if [ $(gcloud compute instances list 2> /dev/null --project ${gcp_project} | grep ${gcp_name} | wc -l) -gt 0 ]; then
+  if [ $(gcloud compute instances list --project ${gcp_project} | grep -c ${gcp_name}) -gt 0 ]; then
     echo "${green}[DEBUG]${reset} Instance found"
     echo ""
     gcloud compute instances list --filter="name:${gcp_name}"
@@ -115,13 +117,13 @@ create()
   done
   echo "${green}[DEBUG]${reset} Compute instance is being deployed  Please ${blue}gcloud compute ssh ${gcp_name}-X [--zone ${gcp_zone}]${reset}.  There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes."
   echo ""
-  echo "${green}[DEBUG]${reset} If you are running windows instance.  Please create your password ${blue}gcloud compute reset-windows-password ${gcp_name}${reset}"
+  echo "${green}[DEBUG]${reset} If you are running windows instance.  Please create your password ${blue}gcloud compute reset-windows-password ${gcp_name}-X${reset}"
   sleep 5
   find
 } # end create
 
 delete() {
-  if [ $(gcloud compute instances list 2> /dev/null --project ${gcp_project} | grep ${gcp_name} | wc -l) -gt 0 ]; then
+  if [ $(gcloud compute instances list --project ${gcp_project} | grep -c ${gcp_name}) -gt 0 ]; then
     for instance in $(gcloud compute instances list | grep ${gcp_name} | awk {' print $1 '})
       do
         echo "${green}[DEBUG]${reset} Deleting ${instance}"
