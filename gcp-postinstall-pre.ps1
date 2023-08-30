@@ -1,5 +1,4 @@
 $text = @"
-@echo off
 powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "& {iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/jlim0930/scripts/master/gcp-postinstall.ps1'))}"
 "@
 
