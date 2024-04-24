@@ -19,7 +19,7 @@
 CPU=""         # Please change this to the # of cores you want minikube to use. If not set it will use half of your total core count
 MEM=""         # Please change this  to the amount of memory to give to minikube. If not set it will use half of your memory up to 16GB max
 # HDD=""        # Please change this to the amount of hdd space to give for minikube. default is 20,000MB
-VERSION="v1.25.0"
+VERSION="v1.33.0"
 SHELL=`env | grep SHELL | awk -F"/" '{ print $NF }'`
 
 ## vars
@@ -86,21 +86,21 @@ function help() {
 
 # function check and install minikube
 function checkminikube() {
-  if ! { [ -x "$(command -v minikube)" ] && [ `minikube version | grep version | awk {' print $3 '}` = "${version}" ]; } then
+  if ! { [ -x "$(command -v minikube)" ] && [ `minikube version | grep version | awk {' print $3 '}` = "${VERSION}" ]; } then
     echo "${red}[DEBUG]${reset} minikube not found or wrong version. Installing."
     if [ $OS == "linux" ]; then
       echo "${green}[DEBUG]${reset} Linux found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/v1.33.0/minikube-linux-amd64
+      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-linux-amd64
       sudo install minikube-linux-amd64 /usr/local/bin/minikube
       rm -rf minikube-linux-amd64 >/dev/null 2>&1
     elif [ ${OS} == "macos-x86_64" ]; then
       echo "${gree}[DEBUG]${reset} macOS x86_64 found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/v1.33.0/minikube-darwin-amd64
+      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-darwin-amd64
       sudo install minikube-darwin-amd64 /usr/local/bin/minikube
       rm -rf minikube-darwin-amd64 >/dev/null 2>&1
     elif [ ${OS} == "macos-arm64" ]; then
       echo "${green}[DEBUG]${reset} macOS arm64 found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/v1.33.0/minikube-darwin-arm64
+      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-darwin-arm64
       sudo install minikube-darwin-arm64 /usr/local/bin/minikube
       rm -rf minikube-darwin-arm64 >/dev/null 2>&1
     fi
