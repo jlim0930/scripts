@@ -45,6 +45,10 @@ EOF
   # install packages
   yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl docker-ce docker-ce-cli containerd.io -y
 
+  # enable docker
+  systemctl enable docker
+  systemctl start docker
+
   # disable services
   for service in auditd firewalld mdmonitor postfix
   do
