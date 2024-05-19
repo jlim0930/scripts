@@ -8,8 +8,18 @@ if [ -f /ran_startup ]; then
   exit;
 fi
 
+function distro() {
+  if [ -f /etc/os-release ]; then
+    source /etc/os-release
+    echo $ID
+  else
+    uname
+  fi
+}
+
+
 # if OS is RHEL based
-if [[ `cat /etc/os-release | grep ^ID` =~ @(centos|rhel|rocky|alma|fedora) ]]; then
+if [[ $(distro) = @(centos|rhel|rocky|alma|fedora) ]]; then
 
   # disable selinux
   sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
@@ -72,7 +82,7 @@ EOF
   yum update -y
 
 
-elif [[ `cat /etc/os-release | grep ^ID` =~ @(debian|ubuntu) ]]; then
+elif [[ $(distro) = @(debian|ubuntu) ]]; then
 
   # add elasticsearch repo
   wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
@@ -111,7 +121,6 @@ EOF
   chmod +x /usr/local/bin/*.sh
 fi
 
-echo "done" > /ran_startup
-reboot
-
+  echo "done" > /ran_startup
+  reboot
 
