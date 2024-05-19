@@ -3,14 +3,13 @@
 # shell script to run for GCP environments
 # to finish off compute installs
 
-# check for a flag and exit
+# create a flag file and check for it
 if [ -f /ran_startup ]; then
   exit;
 fi
 
 # if OS is RHEL based
-if [[ `cat /etc/os-release | grep ^ID` =~ @(centos|rhel|rocky|alma|fedora) ]]; then
-
+if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rocky" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "alma" ]]; then
   # disable selinux
   sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
   setenforce Permissive
@@ -44,11 +43,10 @@ EOF
   yum config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
   # install packages
-  yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq net-tools kubectl docker-ce docker-ce-cli containerd.io -y
+  yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq kubectl docker-ce docker-ce-cli containerd.io -y
 
   # enable docker
   for u in $(lid -g -n google-sudoers); do usermod -a -G docker $u; done
-
   systemctl enable docker
   systemctl start docker
 
@@ -57,6 +55,14 @@ EOF
   do
     systemctl disable ${service}
   done
+
+#  # install docker
+#  # will just grab the script but not install docker to save time
+#  curl -fsSL https://get.docker.com -o /usr/local/bin/get-docker.sh
+#  # sh /tmp/get-docker.sh
+#  # systemctl daemon-reload
+#  # systemctl enable docker
+#  # systemctl start docker
 
   # updating vm.max_map_count
   cat >> /etc/sysctl.d/20-elastic.conf<<EOF
@@ -69,35 +75,25 @@ EOF
   curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
   chmod +x /usr/local/bin/*.sh
 
-  yum update -y
-
-
-elif [[ `cat /etc/os-release | grep ^ID` =~ @(debian|ubuntu) ]]; then
-
-  # add elasticsearch repo
-  wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
-  apt-get install apt-transport-https ca-certificates curl software-properties-common -y
-  echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-7.x.list
-  echo "deb https://artifacts.elastic.co/packages/8.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-8.x.list
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-  apt-cache policy docker-ce
+  #yum update -y
+elif [[ `cat /etc/os-release | grep ^ID` =~ "debian" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "ubuntu" ]]; then
 
   # install packages
   apt-get update
-  apt-get install unzip openssl bash-completion git wget nmap bc jq docker-ce kubectl -y
+  apt-get install unzip openssl bash-completion git wget nmap bc jq docker-compose kubectl -y
+
+  # add elasticsearch repo
+  wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+  apt-get install apt-transport-https -y
+  echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-7.x.list
+  echo "deb https://artifacts.elastic.co/packages/8.x/apt stable main" | tee -a /etc/apt/sources.list.d/elastic-8.x.list
+  apt-get update
 
   # disable services
   for service in apparmor ufw
   do
     systemctl disable ${service}
   done
-
-  # enable docker
-  for u in $(lid -g -n google-sudoers); do usermod -a -G docker $u; done
-
-  systemctl enable docker
-  systemctl start docker
 
   # updating vm.max_map_count
   cat >> /etc/sysctl.d/20-elastic.conf<<EOF
@@ -111,7 +107,5 @@ EOF
   chmod +x /usr/local/bin/*.sh
 fi
 
-echo "done" > /ran_startup
-reboot
-
-
+  echo "done" > /ran_startup
+  reboot
