@@ -3,6 +3,13 @@
 # shell script to run for GCP environments
 # to finish off compute installs
 
+
+if [ -z "$SCRIPT" ]
+then 
+    script /tmp/post-install.txt /bin/sh -c "$0 $*"
+    exit 0
+fi
+
 # check for a flag and exit
 if [ -f /ran_startup ]; then
   exit;
