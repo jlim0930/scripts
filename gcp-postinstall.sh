@@ -46,6 +46,7 @@ EOF
   yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl docker-ce docker-ce-cli containerd.io -y
 
   # enable docker
+  for u in $(lid -g -n google-sudoers); do usermod -a -G docker $u; done
   systemctl enable docker
   systemctl start docker
 
