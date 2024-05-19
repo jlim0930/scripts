@@ -9,7 +9,7 @@ if [ -f /ran_startup ]; then
 fi
 
 # if OS is RHEL based
-if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rocky" ]]; then
+if [[ `cat /etc/os-release | grep ^ID` =~ "centos" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rhel" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "rocky" ]] || [[ `cat /etc/os-release | grep ^ID` =~ "alma" ]]; then
   # disable selinux
   sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
   setenforce Permissive
@@ -39,8 +39,11 @@ EOF
   # install epel repository
   yum install epel-release -y
 
+  # install docker repo
+  yum config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
   # install packages
-  yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl -y
+  yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq bash-completion-extras docker-compose kubectl docker-ce docker-ce-cli containerd.io -y
 
   # disable services
   for service in auditd firewalld mdmonitor postfix
@@ -48,13 +51,13 @@ EOF
     systemctl disable ${service}
   done
 
-  # install docker
-  # will just grab the script but not install docker to save time
-  curl -fsSL https://get.docker.com -o /usr/local/bin/get-docker.sh
-  # sh /tmp/get-docker.sh
-  # systemctl daemon-reload
-  # systemctl enable docker
-  # systemctl start docker
+#  # install docker
+#  # will just grab the script but not install docker to save time
+#  curl -fsSL https://get.docker.com -o /usr/local/bin/get-docker.sh
+#  # sh /tmp/get-docker.sh
+#  # systemctl daemon-reload
+#  # systemctl enable docker
+#  # systemctl start docker
 
   # updating vm.max_map_count
   cat >> /etc/sysctl.d/20-elastic.conf<<EOF
