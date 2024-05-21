@@ -32,7 +32,7 @@ blue=`tput setaf 4`
 reset=`tput sgr0`
 
 # if root exit
-if [ `id -u` -e 0 ]; then
+if [ `id -u` -eq 0 ]; then
   echo "${red}[DEBUG]${reset}Please do not run as root"
   exit
 fi
@@ -67,22 +67,9 @@ function help() {
 function checkminikube() {
   if ! { [ -x "$(command -v minikube)" ] && [ `minikube version | grep version | awk {' print $3 '}` = "${VERSION}" ]; } then
     echo "${red}[DEBUG]${reset} minikube not found or wrong version. Installing."
-    if [ $OS == "linux" ]; then
-      echo "${green}[DEBUG]${reset} Linux found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-linux-amd64
-      sudo install minikube-linux-amd64 /usr/local/bin/minikube
-      rm -rf minikube-linux-amd64 >/dev/null 2>&1
-    elif [ ${OS} == "macos-x86_64" ]; then
-      echo "${gree}[DEBUG]${reset} macOS x86_64 found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-darwin-amd64
-      sudo install minikube-darwin-amd64 /usr/local/bin/minikube
-      rm -rf minikube-darwin-amd64 >/dev/null 2>&1
-    elif [ ${OS} == "macos-arm64" ]; then
-      echo "${green}[DEBUG]${reset} macOS arm64 found."
-      curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-darwin-arm64
-      sudo install minikube-darwin-arm64 /usr/local/bin/minikube
-      rm -rf minikube-darwin-arm64 >/dev/null 2>&1
-    fi
+    curl -LO -s https://storage.googleapis.com/minikube/releases/${VERSION}/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+    rm -rf minikube-linux-amd64 >/dev/null 2>&1
   else
     echo "${green}[DEBUG]${reset} minikube found."
   fi
@@ -92,22 +79,9 @@ function checkminikube() {
 function checkkubectl() {
   if ! [ -x "$(command -v kubectl)" ]; then
     echo "${red}[DEBUG]${reset} kubectl not found. Installing."
-    if [ $OS == "linux" ]; then
-      echo "${green}[DEBUG]${reset} Linux found."
-      curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    elif [ ${OS} == "macos-x86_64" ]; then
-      echo "${gree}[DEBUG]${reset} macOS x86_64 found."
-       curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    elif [ ${OS} == "macos-arm64" ]; then
-      echo "${gree}[DEBUG]${reset} macOS arm64 found."
-      curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    fi
+    curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    sudo install kubectl /usr/local/bin/kubectl
+    rm -rf kubectl >/dev/null 2>&1
   else
     echo "${green}[DEBUG]${reset} kubectl found."
   fi
@@ -127,14 +101,10 @@ function deletemk() {
 
 # function check docker
 function checkdocker() {
-  if [ ${OS} == "macos-x86_64" ] || [ ${OS} == "macos-arm64" ]; then
-    echo "${green}[DEBUG]${reset} Docker found"
-  else
-    docker info >/dev/null 2>&1
-    if [ $? -ne 0 ]; then
-      echo "${red}[DEBUG]${reset} Docker is not running or installed or your not part of the docker group.  Please fix"
-      exit
-    fi
+  docker info >/dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "${red}[DEBUG]${reset} Docker is not running or installed or your not part of the docker group.  Please fix"
+    exit
   fi
 }
 
@@ -145,11 +115,7 @@ function build() {
   echo "${green}[DEBUG]${reset} MEM will be set to ${MEM}mb"
   # minikube config set memory ${MEM}
 #  minikube config set disk-size ${HDD}
-  if [ ${OS} == "linux" ]; then
-    minikube start --driver=docker
-  else
-    minikube start
-  fi
+  minikube start --driver=docker
   minikube addons enable metallb
   baseip=`minikube ip | cut -d"." -f1-3`
   startip="${baseip}.150"
