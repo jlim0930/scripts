@@ -19,6 +19,7 @@ label="division=support,org=support,team=support,project=${gcp_name}"
 
 
 # colors
+bold=`tput bold`
 red=`tput setaf 1`
 green=`tput setaf 2`
 blue=`tput setaf 14`
@@ -115,13 +116,13 @@ case ${1} in
     for count in $(seq 1 ${max})
     do
       image="rocky-linux-8-optimized-gcp"
-      echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting on ${blue}${machine_type}${reset}"
+      echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting on ${blue}${machine_type}${reset} in ${blue}${gcp_zone}${reset}"
       create ${image}
     done
     echo ""
     echo "===================================================================================================================================="
     echo ""
-    echo "${blue}[DEBUG]${reset} There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes."
+    echo "${blue}[DEBUG]${reset} ${bold}There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes.${reset}"
     echo "${green}[DEBUG]${reset} Please ${blue}gcloud compute ssh ${gcp_name} [--zone ${gcp_zone}]${reset}."
     echo ""
     find
