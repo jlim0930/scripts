@@ -122,7 +122,6 @@ case ${1} in
     echo "${blue}[DEBUG]${reset} ${bold}There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes.${reset}"
     echo "${green}[DEBUG]${reset} Please ${blue}gcloud compute ssh ${gcp_name} [--zone ${gcp_zone}]${reset}."
     echo ""
-    find
     ;;
   find|info|status|check)
     find
