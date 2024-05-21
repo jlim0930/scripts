@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
 
@@ -11,16 +11,15 @@
 # sudo access is required for some instances
 # tested on linux and macOS
 #
-
+# for linux it will use the docker driver
+# for macOS it will use the hyperkit driver
 #################
 
 ## User configurable variables
 CPU=""         # Please change this to the # of cores you want minikube to use. If not set it will use half of your total core count
 MEM=""         # Please change this  to the amount of memory to give to minikube. If not set it will use half of your memory up to 16GB max
 # HDD=""        # Please change this to the amount of hdd space to give for minikube. default is 20,000MB
-
 VERSION="v1.33.0"
-
 SHELL=`env | grep SHELL | awk -F"/" '{ print $NF }'`
 
 ## vars
@@ -38,11 +37,11 @@ case ${OS} in
     OS="linux"
     if [ -z ${CPU} ]; then
       temp=`nproc`
-      CPU=`echo $((${temp}/2))`
+      CPU=`echo "${temp}/2" | bc`
     fi
     if [ -z ${MEM} ]; then
-      temp=`free -m | grep Mem | awk {' print $2 '}`
-      value=`echo $((${temp}/2))`
+      temp=`free -m | awk '/Mem\:/ { print $2 }'`
+      value=`echo "${temp}/2" | bc`
       if [ ${value} -gt "16384" ]; then
         MEM="16384"
       else
@@ -62,6 +61,7 @@ case ${OS} in
     fi
     if [ -z ${MEM} ]; then
       temp=`sysctl -n hw.memsize`
+      # value=`echo "${temp}/2097152" | bc`
       value=`docker system info --format '{{.MemTotal}}' | grep -o '[0-9]*' | awk '{printf "%.0f\n", $1/1024/1024}'`
       if [ ${value} -gt "16384" ]; then
         MEM="16384"
@@ -136,10 +136,10 @@ function checkkubectl() {
 
 # function delete the local minikube and kubectl in /usr/local/bin
 function deletemk() {
-#  if [ -x "$(command -v kubectl)" ]; then
-#    rm -rf $(command -v kubectl)
-#    echo "${green}[DEBUG]${reset} Deleted kubectl"
-#  fi
+  if [ -x "$(command -v kubectl)" ]; then
+    rm -rf $(command -v kubectl)
+    echo "${green}[DEBUG]${reset} Deleted kubectl"
+  fi
   if [ -x "$(command -v minikube)" ]; then
     rm -rf $(command -v minikube)
     echo "${green}[DEBUG]${reset} Deleted minikube"
@@ -149,7 +149,7 @@ function deletemk() {
 # function check docker
 function checkdocker() {
   if [ ${OS} == "macos-x86_64" ] || [ ${OS} == "macos-arm64" ]; then
-    echo "${green}[DEBUG]${reset} Docker found"
+    echo "${green}[DEBUG]${reset} macos found will use hyperkit instead of docker"
   else
     docker info >/dev/null 2>&1
     if [ $? -ne 0 ]; then
