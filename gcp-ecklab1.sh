@@ -53,7 +53,7 @@ EOF
 
 # install epel repository
 yum install epel-release -y
-yum --enablerepo=extras install epel-release
+yum --enablerepo=extras install epel-release -y
 
 # install docker repo
 yum config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
