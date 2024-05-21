@@ -112,13 +112,10 @@ create()
 ## main body
 case ${1} in
   create|start)
-    max="1"
-    for count in $(seq 1 ${max})
-    do
-      image="rocky-linux-8-optimized-gcp"
-      echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting on ${blue}${machine_type}${reset} in ${blue}${gcp_zone}${reset}"
-      create ${image}
-    done
+    image="rocky-linux-8-optimized-gcp"
+    echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting on ${blue}${machine_type}${reset} in ${blue}${gcp_zone}${reset}"
+    create ${image}
+
     echo ""
     echo "===================================================================================================================================="
     echo ""
