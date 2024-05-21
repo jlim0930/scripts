@@ -87,7 +87,7 @@ done
 
 # install some scripts for lab
 curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o /usr/local/bin/deploy-elastick8s.sh
-curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube.sh -o /usr/local/bin/kube.sh
+curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/kube-ecklab.sh -o /usr/local/bin/kube.sh
 chmod +x /usr/local/bin/*.sh
 
 yum update -y
