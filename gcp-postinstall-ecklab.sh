@@ -84,6 +84,8 @@ do
   systemctl disable ${service}
 done
 
+# install helm
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
 # install some scripts for lab
 curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o /usr/local/bin/deploy-elastick8s.sh
