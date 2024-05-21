@@ -115,13 +115,14 @@ case ${1} in
     for count in $(seq 1 ${max})
     do
       image="rocky-linux-8-optimized-gcp"
-      echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting..."
+      echo "${green}[DEBUG]${reset} ${blue}${image}${reset} instance starting on ${blue}${machine_type}${reset}"
       create ${image}
     done
     echo ""
     echo "===================================================================================================================================="
     echo ""
-    echo "${green}[DEBUG]${reset} For ${blue}linux${reset} instances: Please ${blue}gcloud compute ssh ${gcp_name} [--zone ${gcp_zone}]${reset}.  There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes."
+    echo "${blue}[DEBUG]${reset} There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes."
+    echo "${green}[DEBUG]${reset} Please ${blue}gcloud compute ssh ${gcp_name} [--zone ${gcp_zone}]${reset}."
     echo ""
     find
     ;;
