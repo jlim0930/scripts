@@ -31,50 +31,29 @@ green=`tput setaf 2`
 blue=`tput setaf 4`
 reset=`tput sgr0`
 
-# Get OS & set CPU & MEM
-OS=`uname -s`
-case ${OS} in
-  "Linux")
-    OS="linux"
-    if [ -z ${CPU} ]; then
-      temp=`nproc`
-      CPU=`echo $((${temp}-1))`
-    fi
-    if [ -z ${MEM} ]; then
-      temp=`free -m | grep Mem | awk {' print $2 '}`
-      value=`echo $((${temp}-4096))`
-      if [ ${value} -gt "16384" ]; then
-        MEM="16384"
-      else
-        MEM="${value}"
-      fi
-    fi
-    ;;
-  "Darwin")
-    if [ `uname -m` == "x86_64" ]; then
-      OS="macos-x86_64"
-    elif [ `uname -m` == "arm64" ]; then
-      OS="macos-arm64"
-    fi
-    if [ -z ${CPU} ]; then
-      temp=`sysctl -n hw.ncpu`
-      CPU=`echo "${temp}/2" | bc`
-    fi
-    if [ -z ${MEM} ]; then
-      temp=`sysctl -n hw.memsize`
-      value=`docker system info --format '{{.MemTotal}}' | grep -o '[0-9]*' | awk '{printf "%.0f\n", $1/1024/1024}'`
-      if [ ${value} -gt "16384" ]; then
-        MEM="16384"
-      else
-        MEM="${value}"
-      fi
-    fi
-    ;;
-  *)
-    echo "${red}[DEBUG]${reset} This script only supports macOS and linux"
-    exit
-    ;;
-esac
+# if root exit
+if [ `id -u` -e 0 ]; then
+  echo "${red}[DEBUG]${reset}Please do not run as root"
+  exit
+fi
+
+# set CPU
+if [ -z ${CPU} ]; then
+  temp=`nproc`
+  CPU=`echo $((${temp}-1))`
+fi
+
+# set MEM
+if [ -z ${MEM} ]; then
+  temp=`free -m | grep Mem | awk {' print $2 '}`
+  value=`echo $((${temp}-4096))`
+  if [ ${value} -gt "16384" ]; then
+    MEM="16384"
+  else
+    MEM="${value}"
+  fi
+fi
+
 
 ## functions
 
