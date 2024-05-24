@@ -5,12 +5,12 @@
 # --------------EDIT information below
 
 ### PERSONAL ###################
-gcp_name="$(whoami)-ecklab"
+gcp_name="$(whoami | sed $'s/[^[:alnum:]\t]//g')-ecklab"    # GCP name will automatically set to your username with special chars removed-eck
+gcp_zone="us-central1-b"        # GCP zone - select one that is close to you
 
 ### ORGANIZATION ###############
 
 gcp_project="elastic-support"
-gcp_zone="us-central1-b"        # GCP zone - select one that is close to you
 machine_type="e2-standard-8"    # GCP machine type - gcloud compute machine-types list
 boot_disk_type="pd-ssd"         # disk type -  gcloud compute disk-types list
 label="division=support,org=support,team=support,project=${gcp_name}"
