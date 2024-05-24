@@ -139,7 +139,7 @@ EOF
   rm -rf /tmp/metallb-config.yaml >/dev/null 2>&1
   echo "${green}[DEBUG]${reset} minikube IP is: `minikube ip`"
   echo "${green}[DEBUG]${reset} LoadBalancer Pool: ${startip} - ${endip}"
-  source < $(kubectl completion bash)
+
 }
 
 ## script
