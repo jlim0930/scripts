@@ -54,6 +54,20 @@ autorefresh=1
 type=rpm-md
 EOF
 
+  # enable fastmirror
+  cat > /etc/dnf/dnf.conf<<EOF
+[main]
+gpgcheck=1
+installonly_limit=3
+clean_requirements_on_remove=True
+best=False
+skip_if_unavailable=True
+ip_resolve=4
+fastestmirror=1
+EOF
+
+  yum clean all
+
   # install epel repository
   yum install epel-release -y
 

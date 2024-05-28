@@ -25,31 +25,20 @@ function distro() {
 }
 
 
-# disable selinux
-sed -i 's/SELINUX=enforcing/SELINUX=permissive/g' /etc/sysconfig/selinux
-setenforce Permissive
-
-# create elasticsearch repo
-rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
-cat >> /etc/yum.repos.d/elasticsearch.repo<<EOF
-[elasticsearch-7]
-name=Elasticsearch repository for 7.x packages
-baseurl=https://artifacts.elastic.co/packages/7.x/yum
+# enable fast mirror
+cat > /etc/dnf/dnf.conf <<EOF
+[main]
 gpgcheck=1
-gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
-enabled=1
-autorefresh=1
-type=rpm-md
-
-[elasticsearch-8]
-name=Elasticsearch repository for 8.x packages
-baseurl=https://artifacts.elastic.co/packages/8.x/yum
-gpgcheck=1
-gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
-enabled=1
-autorefresh=1
-type=rpm-md
+installonly_limit=3
+clean_requirements_on_remove=True
+best=False
+skip_if_unavailable=True
+ip_resolve=4
+fastestmirror=1
 EOF
+
+yum clean all
+
 
 # install epel repository
 yum install epel-release -y
