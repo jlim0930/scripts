@@ -5,7 +5,7 @@
 
 
 if [ -z "$SCRIPT" ]
-then 
+then
     script /tmp/post-install.txt /bin/sh -c "$0 $*"
     exit 0
 fi
@@ -67,6 +67,7 @@ fastestmirror=1
 EOF
 
   yum clean all
+  yum makecache
 
   # install epel repository
   yum install epel-release -y

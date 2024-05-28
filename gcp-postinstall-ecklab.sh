@@ -5,7 +5,7 @@
 
 
 if [ -z "$SCRIPT" ]
-then 
+then
     script /tmp/post-install.txt /bin/sh -c "$0 $*"
     exit 0
 fi
@@ -38,7 +38,7 @@ fastestmirror=1
 EOF
 
 yum clean all
-
+yum makecache
 
 # install epel repository
 yum install epel-release -y
@@ -68,7 +68,7 @@ systemctl enable xrdp
 systemctl start xrdp
 
 # disable services
-for service in auditd firewalld mdmonitor postfix bluetooth 
+for service in auditd firewalld mdmonitor postfix bluetooth
 do
   systemctl disable ${service}
 done
