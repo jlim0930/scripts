@@ -111,10 +111,17 @@ function checkdocker() {
 # function start
 function build() {
   echo "${green}[DEBUG]${reset} CPU will be set to ${CPU} cores"
-  # minikube config set cpus ${CPU}
+  minikube config set cpus ${CPU}
   echo "${green}[DEBUG]${reset} MEM will be set to ${MEM}mb"
-  # minikube config set memory ${MEM}
-#  minikube config set disk-size ${HDD}
+  minikube config set memory ${MEM}
+
+  # adding host entries onto the host
+  echo "192.168.49.175 kibana.eck.lab" > /etc/hosts
+  # adding host entries for minikube
+  mkdir -p ~/.minikube/files/etc
+  echo "127.0.0.1 localhost" > ~/.minikube/files/etc/hosts
+  echo "192.168.49.175 kibana.eck.lab" >> ~/.minikube/files/etc/hosts
+
   minikube start --driver=docker
   minikube addons enable metallb
   baseip=`minikube ip | cut -d"." -f1-3`
