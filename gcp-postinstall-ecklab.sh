@@ -25,6 +25,11 @@ function distro() {
 }
 
 
+# make /etc/hosts entry
+cat >> /etc/hosts <<EOF
+192.168.49.170 kibana.eck.lab
+EOF
+
 # enable fast mirror
 cat > /etc/dnf/dnf.conf <<EOF
 [main]
