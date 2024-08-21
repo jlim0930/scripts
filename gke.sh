@@ -1,84 +1,73 @@
 #!/bin/bash
 
-## Creates a GKE cluster
-# ------- EDIT information below to customize for your needs
-gke_cluster_name="justinlim-gke"          # name of your k8s cluster
-gke_project="elastic-support-k8s-dev"     # project that you are linked to
-
-#gke_zone="us-central1-c"                  # zone
-gke_region="us-central1"                  # region
-gke_cluster_nodes="1"                     # number of nodes per az
-gke_machine_type="e2-standard-4"          # node machine type
-# gke_cluster_node_vCPUs="4"               # vCPUs for node
-# gke_cluster_node_RAM="16384"
+# ===== User Configurable Variables =====
+gke_project="elastic-support-k8s-dev"
+gke_region="us-central1"
+gke_machine_type="e2-standard-4"
 label="division=support,org=support,team=support,project=${gke_cluster_name}"
 
-# -------- do not edit below
+gke_cluster_nodes="1"
 
-# colors
-red=`tput setaf 1`
-green=`tput setaf 2`
-blue=`tput setaf 4`
-reset=`tput sgr0`
+# ===== Constants =====
+gke_cluster_name="$(whoami | sed $'s/[^[:alnum:]\t]//g')-gkelab"
+kubectl_url_base="https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin"
+kubectl_install_path="/usr/local/bin/kubectl"
 
+# ===== Color Constants =====
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+blue=$(tput setaf 4)
+reset=$(tput sgr0)
 
-# help function
+# ===== Helper Functions =====
 help() {
   echo "This script is to stand up a GKE environment in ${gke_project}"
   echo ""
-  echo "${green}Usage:${reset} ./`basename $0` COMMAND"
+  echo "${green}Usage:${reset} ./$(basename $0) COMMAND"
   echo "${blue}COMMANDS${reset}"
   echo "  ${green}start${reset} - Starts your GKE environment"
-  echo "  ${green}find${reset} - Searchs for your deployment"
+  echo "  ${green}find${reset}  - Searches for your deployment"
   echo "  ${green}delete${reset} - Deletes your GKE environment"
+}
 
-} # end help
-
-# check for kubectl and install it - will need sudo
 checkkubectl() {
-  if ! [ -x "$(command -v kubectl)" ]; then
+  if ! command -v kubectl &>/dev/null; then
     echo "${red}[DEBUG]${reset} kubectl not found. Installing."
-    if [ $OS == "linux" ]; then
-      echo "${green}[DEBUG]${reset} Linux found."
-      curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    elif [ ${OS} == "macos-x86_64" ]; then
-      echo "${gree}[DEBUG]${reset} macOS x86_64 found."
-       curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    elif [ ${OS} == "macos-arm64" ]; then
-      echo "${gree}[DEBUG]${reset} macOS arm64 found."
-      curl -LO -s "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"
-      sudo install kubectl /usr/local/bin/kubectl
-      rm -rf kubectl >/dev/null 2>&1
-    fi
+    case ${OS} in
+      "linux")
+        curl -LO "${kubectl_url_base}/linux/amd64/kubectl"
+        ;;
+      "macos-x86_64")
+        curl -LO "${kubectl_url_base}/darwin/amd64/kubectl"
+        ;;
+      "macos-arm64")
+        curl -LO "${kubectl_url_base}/darwin/arm64/kubectl"
+        ;;
+    esac
+    sudo install kubectl "${kubectl_install_path}"
+    rm -f kubectl
   else
     echo "${green}[DEBUG]${reset} kubectl found."
   fi
-} # end checkkubectl
+}
 
-# find function
-find() {
-  if [ $(gcloud container clusters list 2> /dev/null --project ${gke_project} |  grep ${gke_cluster_name} | wc -l) -gt 0 ]; then
+find_cluster() {
+  if gcloud container clusters list --project "${gke_project}" 2> /dev/null| grep -q "${gke_cluster_name}"; then
     echo "${green}[DEBUG]${reset} Cluster ${gke_cluster_name} exists."
     echo ""
-    gcloud container clusters list --project ${gke_project} | egrep "STATUS|${gke_cluster_name}"
-    exit
+    gcloud container clusters list --project "${gke_project}" 2> /dev/null| grep -E "STATUS|${gke_cluster_name}"
   else
-    echo "${green}[DEBUG]${reset} Cluster ${gke_cluster_name} not found."
-  fi    
-} # end find
+    echo "${red}[DEBUG]${reset} Cluster ${gke_cluster_name} not found."
+  fi
+}
 
-# start the deloyment
-start() {
-  find
+start_cluster() {
+  find_cluster
   echo "${green}[DEBUG]${reset} Creating cluster ${gke_cluster_name}"
   echo ""
 
   gcloud container clusters create "${gke_cluster_name}" \
-    --labels=${label} \
+    --labels="${label}" \
     --project="${gke_project}" \
     --region="${gke_region}" \
     --num-nodes="${gke_cluster_nodes}" \
@@ -88,63 +77,61 @@ start() {
     --image-type="COS_CONTAINERD" \
     --release-channel="stable" \
     --max-pods-per-node="110" \
+    --cluster-ipv4-cidr="/17" \
+    --services-ipv4-cidr="/22" \
     --enable-ip-alias \
     --enable-autorepair
 
-  echo ""
-  echo "${green}[DEBUG]${reset} Configure kubectl context for ${gke_cluster_name}"
-  gcloud container clusters get-credentials ${gke_cluster_name} --region=${gke_region} --project=${gke_project}
-  echo "${green}[DEBUG]${reset} Adding gcloud RBAC for cluster admin role"
-  kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
-} # end start
+  echo "${green}[DEBUG]${reset} Configuring kubectl context for ${gke_cluster_name}"
+  gcloud container clusters get-credentials "${gke_cluster_name}" --region="${gke_region}" --project="${gke_project}"
 
-# delete | cleanup
-delete() {
-  if [ $(gcloud container clusters list 2> /dev/null --project ${gke_project} | grep ${gke_cluster_name} | wc -l) -gt 0 ]; then
-    echo "${green}[DEBUG]${reset} Remove kubectl context"
-    # kubectl config unset contexts.${gke_cluster_name}
+  echo "${green}[DEBUG]${reset} Adding gcloud RBAC for cluster admin role"
+  kubectl create clusterrolebinding cluster-admin-binding \
+    --clusterrole=cluster-admin \
+    --user="$(gcloud auth list --filter=status:ACTIVE --format="value(account)")"
+}
+
+delete_cluster() {
+  if gcloud container clusters list --project "${gke_project}" 2> /dev/null| grep -q "${gke_cluster_name}"; then
+    echo "${green}[DEBUG]${reset} Removing kubectl context"
     kubectl config unset current-context
-    kubectl config delete-context gke_${gke_project}_${gke_region}_${gke_cluster_name}
+    kubectl config delete-context "gke_${gke_project}_${gke_region}_${gke_cluster_name}"
 
     echo "${green}[DEBUG]${reset} Deleting ${gke_cluster_name}"
-    gcloud container clusters delete ${gke_cluster_name} --project=${gke_project} --region=${gke_region} --quiet;
-
-  else 
+    gcloud container clusters delete "${gke_cluster_name}" --project="${gke_project}" --region="${gke_region}" --quiet
+  else
     echo "${red}[DEBUG]${reset} Cluster ${gke_cluster_name} not found"
   fi
-} # end delete
+}
 
-OS=`uname -s`
+# ===== Main Script =====
+OS=$(uname -s)
 case ${OS} in
   "Linux")
     OS="linux"
     ;;
   "Darwin")
-    if [ `uname -m` == "x86_64" ]; then
-      OS="macos-x86_64"
-    elif [ `uname -m` == "arm64" ]; then
-      OS="macos-arm64"
-    fi
+    OS="macos-$(uname -m)"
     ;;
   *)
-    echo "${red}[DEBUG]${reset} This script only supports macOS and linux"
-    exit
+    echo "${red}[DEBUG]${reset} This script only supports macOS and Linux"
+    exit 1
     ;;
 esac
 
 case ${1} in
-  deploy|start)
+  start|deploy|create)
     checkkubectl
-    start
+    start_cluster
     ;;
   find|check|info|status)
-    find
+    find_cluster
     ;;
-  cleanup|delete|stop)
-    delete
+  delete|cleanup|stop)
+    delete_cluster
     ;;
   *)
     help
-    exit
+    exit 1
     ;;
 esac
