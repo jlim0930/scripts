@@ -7,10 +7,11 @@
 ### ORGANIZATION ###############
 
 gcp_project="elastic-support"
-gcp_zone="us-central1-b"        # GCP zone - select one that is close to you
+REGION="us-central1"
+# gcp_zone="us-central1-b"        # GCP zone - select one that is close to you
 machine_type="e2-standard-4"    # GCP machine type - gcloud compute machine-types list
 boot_disk_type="pd-ssd"         # disk type -  gcloud compute disk-types list
-label="division=support,org=support,team=support,project=${gcp_name}"
+label="division=support,org=support,team=support,project=gcp-lab"
 
 # --------------  Do not edit below
 
@@ -18,10 +19,10 @@ label="division=support,org=support,team=support,project=${gcp_name}"
 gcp_name="$(whoami | sed $'s/[^[:alnum:]\t]//g')-lab"
 
 # colors
-red=`tput setaf 1`
-green=`tput setaf 2`
-blue=`tput setaf 14`
-reset=`tput sgr0`
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+blue=$(tput setaf 14)
+reset=$(tput sgr0)
 
 # Function to display help
 help() {
@@ -30,21 +31,28 @@ This script is to stand up a GCP environment in ${gcp_project} Project
 
 ${green}Usage:${reset} ./$(basename "$0") COMMAND
 ${blue}COMMANDS${reset}
-  ${green}create${reset} - Creates your GCP environment & runs post-scripts (Linux)
-  ${green}find${reset}   - Finds info about your GCP environment
-  ${green}delete${reset} - Deletes your GCP environment
+  ${green}create|start${reset}             - Creates your GCP environment & runs post-scripts (Linux)
+  ${green}find|info|status|check${reset}   - Finds info about your GCP environment
+  ${green}delete|cleanup|stop${reset}      - Deletes your GCP environment
 EOF
 }
 
+debug() {
+  echo "${green}[DEBUG]${reset} $1"
+}
+
+debugr() {
+  echo "${red}[DEBUG]${reset} $1"
+}
 
 # load image list
 load_image_list() {
-  echo "${green}[DEBUG]${reset} Generating a list of supported images"
+  debug "Generating a list of supported images"
   image_list=$(gcloud compute images list --format="table(name, family, selfLink)" --filter="-name=sql AND -name=sap" | grep -v arm | grep "\-cloud" | sort)
   IFS=$'\n' read -r -d '' -a images <<< "$image_list"
 
   if [ -z "$image_list" ]; then
-    echo "${red}[DEBUG]${reset} No images found with the specified filters."
+    debugr "No images found with the specified filters."
     exit 1
   fi
 
@@ -52,7 +60,7 @@ load_image_list() {
 } # end
 
 select_image() {
-  echo "${green}[DEBUG]${reset} Select an image family:"
+  debug "Select an image family:"
   original_columns=$COLUMNS
   COLUMNS=1
   select selected_family in "${families[@]}"; do
@@ -62,7 +70,7 @@ select_image() {
       selected_project=$(echo "$selected_image" | awk '{print $3}')
       break
     else
-      echo "${red}[DEBUG]${reset} Invalid selection. Please try again."
+      debugr "Invalid selection. Please try again."
     fi
   done
   COLUMNS=$original_columns
@@ -73,21 +81,44 @@ select_image() {
 find_instances() {
   instance_count=$(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name)" | wc -l)
   if [ "$instance_count" -gt 0 ]; then
-    echo "${green}[DEBUG]${reset} Instance(s) found"
+    debug "Instance(s) found"
     gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="table[box](name, zone.basename(), machineType.basename(), status, networkInterfaces[0].networkIP, networkInterfaces[0].accessConfigs[0].natIP, disks[0].licenses[0].basename())"
   else
-    echo "${red}[DEBUG]${reset} No instances found"
+    debugr "No instances found"
   fi
 }
 
 delete_instances() {
-  instance_count=$(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name)" | wc -l)
-  if [ "$instance_count" -gt 0 ]; then
-    echo "${green}[DEBUG]${reset} Deleting instances"
-    gcloud compute instances delete $(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name)") --project "${gcp_project}" --zone="${gcp_zone}" --quiet
-  else
-    echo "${red}[DEBUG]${reset} No instances found with name ${gcp_name}"
+  instancelist=$(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name,zone)")
+  if [ -z "$instancelist" ]; then
+    debugr "No instances found with name ${gcp_name}"
+    return 0
   fi
+
+  # Iterate over the list of instances and delete them
+  while read -r instance_name instance_zone; do
+    debug "Deleting instance ${blue}$instance_name${reset} in zone ${blue}${instance_zone}${reset}..."
+    gcloud compute instances delete "$instance_name" --zone="$instance_zone" --delete-disks all --quiet
+  done <<< "$instancelist"
+}
+
+# delete_instances() {
+#   instance_count=$(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name)" | wc -l)
+#   if [ "$instance_count" -gt 0 ]; then
+#     debug "Deleting instances"
+#     gcloud compute instances delete $(gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="value(name)") --project "${gcp_project}" --zone="${gcp_zone}" --quiet
+#   else
+#     debugr "No instances found with name ${gcp_name}"
+#   fi
+# }
+
+get_random_zone() {
+  local zone_array=($zones)
+  local zone_count=${#zone_array[@]}
+  local random_index=$((RANDOM % zone_count))
+  local selected_zone=${zone_array[$random_index]}
+
+  echo $selected_zone
 }
 
 create_instances() {
@@ -96,10 +127,14 @@ create_instances() {
   
   load_image_list
 
+  zones=$(gcloud compute zones list --filter="region:(${REGION})" --format="value(name)")
+ 
+
   for count in $(seq 1 "$max"); do
     select_image
+    gcp_zone=$(get_random_zone)
     echo ""
-    echo "${green}[DEBUG]${reset} Creating instance ${blue}${gcp_name}-${count}${reset} with image ${blue}${selected_image_name}${reset}"
+    debug "Creating instance ${blue}${gcp_name}-${count}${reset} with image ${blue}${selected_image_name}${reset}"
     echo ""
     if [ -z "$(echo ${selected_image_name} | grep "window")" ]; then
       gcloud compute instances create ${gcp_name}-${count} \
