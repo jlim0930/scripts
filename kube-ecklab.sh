@@ -116,11 +116,11 @@ function build() {
   minikube config set memory ${MEM}
 
   # adding host entries onto the host
-  echo "192.168.49.175 kibana.eck.lab" > /etc/hosts
+  echo "192.168.49.170 kibana.eck.lab" > /etc/hosts
   # adding host entries for minikube
   mkdir -p ~/.minikube/files/etc
   echo "127.0.0.1 localhost" > ~/.minikube/files/etc/hosts
-  echo "192.168.49.175 kibana.eck.lab" >> ~/.minikube/files/etc/hosts
+  echo "192.168.49.170 kibana.eck.lab" >> ~/.minikube/files/etc/hosts
 
   minikube start --driver=docker
   minikube addons enable metallb
