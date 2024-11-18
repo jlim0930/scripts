@@ -37,24 +37,6 @@ help()
   echo "  ${green}delete${reset} - Deletes your GCP environment"
 } # end help
 
-# find image
-find_image() {
-  unset STRING
-  unset PROJECT
-  unset IMAGE
-
-  STRING=$(gcloud compute images list | grep -v arm | grep READY | grep "\-cloud " | grep "${1} " | tail -1)
-  PROJECT=$(echo ${STRING} | awk {' print $2'})
-  IMAGE=$(echo ${STRING} | awk {' print $1 '})
-  if [ -z ${PROJECT} ]; then
-    echo "${red}[DEBUG]${reset} Family: ${1} not found"
-    help
-    exit
-  else
-    echo "${green}[DEBUG]${reset} Found PROJECT: ${blue}${PROJECT}${reset} IMAGE: ${blue}${IMAGE}${reset}"
-  fi
-} # end find_image
-
 # find
 find() {
   # finds the info for your compute instance
@@ -106,6 +88,7 @@ create()
 
   gcloud compute instances create ${gcp_name} \
     --quiet \
+    --project ${gcp_project} \
     --image-family rocky-linux-8-optimized-gcp \
     --image-project rocky-linux-cloud \
     --zone ${gcp_zone} \
@@ -147,16 +130,3 @@ case ${1} in
     help
     ;;
 esac
-
-
-
-
-
-
-
-
-
-
-
-
-
