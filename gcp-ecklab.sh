@@ -84,20 +84,34 @@ delete() {
 # create
 create()
 {
-  find_image ${image}
+  # find_image ${image}
   echo "${green}[DEBUG]${reset} Creating instance ${blue}${gcp_name}${reset} with ${blue}${image}${reset}"
+  #gcloud compute instances create ${gcp_name} \
+  #  --quiet \
+  #  --labels ${label} \
+  #  --project=${gcp_project} \
+  #  --zone=${gcp_zone} \
+  #  --machine-type=${machine_type} \
+  #  --network-interface=network-tier=PREMIUM,subnet=default \
+  #  --maintenance-policy=MIGRATE \
+  #  --provisioning-model=STANDARD \
+  #  --tags=http-server,https-server \
+  #  --stack-type=IPV4_IPV6 \
+  #  --create-disk=auto-delete=yes,boot=yes,device-name=${gcp_name},image=projects/${PROJECT}/global/images/${IMAGE},mode=rw,type=projects/elastic-support/zones/${gcp_zone}/diskTypes/${boot_disk_type} \
+  #  --metadata=startup-script='#!/bin/sh
+  #  if [ ! -f /ran_startup ]; then
+  #    curl -s https://raw.githubusercontent.com/jlim0930/scripts/master/gcp-postinstall-ecklab.sh | sh
+  #  fi
+  #  '
+
   gcloud compute instances create ${gcp_name} \
     --quiet \
+    --image-family rocky-linux-8-optimized-gcp \
+    --image-project rocky-linux-cloud \
+    --zone ${gcp_zone} \
     --labels ${label} \
-    --project=${gcp_project} \
-    --zone=${gcp_zone} \
-    --machine-type=${machine_type} \
-    --network-interface=network-tier=PREMIUM,subnet=default \
-    --maintenance-policy=MIGRATE \
-    --provisioning-model=STANDARD \
+    --machine-type ${machine_type} \
     --tags=http-server,https-server \
-    --stack-type=IPV4_IPV6 \
-    --create-disk=auto-delete=yes,boot=yes,device-name=${gcp_name},image=projects/${PROJECT}/global/images/${IMAGE},mode=rw,type=projects/elastic-support/zones/${gcp_zone}/diskTypes/${boot_disk_type} \
     --metadata=startup-script='#!/bin/sh
     if [ ! -f /ran_startup ]; then
       curl -s https://raw.githubusercontent.com/jlim0930/scripts/master/gcp-postinstall-ecklab.sh | sh
