@@ -43,8 +43,8 @@ find() {
   if [ $(gcloud compute instances list  --project ${gcp_project} 2> /dev/null | grep ${gcp_name} | wc -l) -gt 0 ]; then
     echo "${green}[DEBUG]${reset} Instance(s) found"
     echo ""
-    # gcloud compute instances list --project ${gcp_project} --filter="name:${gcp_name}"
-    gcloud compute instances list --project ${gcp_project} --filter="name:${gcp_name}" --format="table[box] (name, zone.basename(), machineType.basename(), status, networkInterfaces[0].networkIP, networkInterfaces[0].accessConfigs[0].natIP, disks.licenses)"
+    # gcloud compute instances list --project ${gcp_project} --filter="name:${gcp_name}" --format="table[box] (name, zone.basename(), machineType.basename(), status, networkInterfaces[0].networkIP, networkInterfaces[0].accessConfigs[0].natIP, disks.licenses)"
+    gcloud compute instances list --project "${gcp_project}" --filter="name:${gcp_name}" --format="table[box](name, zone.basename(), machineType.basename(), status, networkInterfaces[0].networkIP, networkInterfaces[0].accessConfigs[0].natIP, disks[0].licenses[0].basename())"
   else
     echo "${red}[DEBUG]${reset} You dont have any instances running"
   fi
