@@ -13,4 +13,4 @@ scoop install sudo
 scoop install 7zip git
 scoop bucket add extras
 
-scoop install putty firefox mobaxterm 7zip powertoys sysinternals
+scoop install putty firefox mobaxterm 7zip
