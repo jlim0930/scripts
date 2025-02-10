@@ -124,11 +124,11 @@ get_random_zone() {
 create_instances() {
   read -p "${green}[DEBUG]${reset} Please input the number of instances [1]: " max
   max="${max:-1}"
-  
+
   load_image_list
 
   zones=$(gcloud compute zones list --filter="region:(${REGION})" --format="value(name)")
- 
+
 
   for count in $(seq 1 "$max"); do
     select_image
@@ -143,7 +143,7 @@ create_instances() {
         --project=${gcp_project} \
         --zone=${gcp_zone} \
         --machine-type=${machine_type} \
-        --network-interface=network-tier=PREMIUM,subnet=default \
+        --network-interface=network-tier=PREMIUM,subnet=support-lab-vpc-us-sub1 \
         --maintenance-policy=MIGRATE \
         --provisioning-model=STANDARD \
         --tags=http-server,https-server \
@@ -177,12 +177,12 @@ create_instances() {
 
 ====================================================================================================================================
 
-${green}[DEBUG]${reset} For ${blue}linux${reset} instances: 
-  ${green}[DEBUG]${reset} Please ${blue}gcloud compute ssh ${gcp_name}-X [--zone ${gcp_zone}]${reset}.  
+${green}[DEBUG]${reset} For ${blue}linux${reset} instances:
+  ${green}[DEBUG]${reset} Please ${blue}gcloud compute ssh ${gcp_name}-X [--zone ${gcp_zone}]${reset}.
   ${green}[DEBUG]${reset} There is a post install script running and it will reboot the instance once complete, usually in about 3-5 minutes.
 
 ${green}[DEBUG]${reset} For ${blue}windows${reset} instances: Please create your password ${blue}gcloud compute reset-windows-password ${gcp_name}-X[--zone ${gcp_zone}]${reset}
-  ${green}[DEBUG]${reset} Please open powershell(non-admin) and run the following lines to install mobaxterm/firefox/powertoys/other tools: 
+  ${green}[DEBUG]${reset} Please open powershell(non-admin) and run the following lines to install mobaxterm/firefox/powertoys/other tools:
   ${blue}[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12${reset}
   ${blue}iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/jlim0930/scripts/master/gcp-postinstall.ps1'))${reset}
 EOF
