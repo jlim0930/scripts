@@ -65,7 +65,7 @@ select_image() {
   COLUMNS=1
   select selected_family in "${families[@]}"; do
     if [ -n "$selected_family" ]; then
-      selected_image=$(echo "$image_list" | grep "$selected_family" | head -n 1)
+      selected_image=$(echo "$image_list" | grep "$selected_family " | head -n 1)
       selected_image_name=$(echo "$selected_image" | awk '{print $1}')
       selected_project=$(echo "$selected_image" | awk '{print $3}')
       break
@@ -143,7 +143,7 @@ create_instances() {
         --project=${gcp_project} \
         --zone=${gcp_zone} \
         --machine-type=${machine_type} \
-        --network-interface=network-tier=PREMIUM,subnet=support-lab-vpc-us-sub1 \
+        --network-interface=network-tier=PREMIUM,subnet=default \
         --maintenance-policy=MIGRATE \
         --provisioning-model=STANDARD \
         --tags=http-server,https-server \
