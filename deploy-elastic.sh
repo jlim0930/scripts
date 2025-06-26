@@ -108,7 +108,7 @@ version() {
     help
     exit
   else
-    re="^[6-8]{1}[.][0-9]{1,2}[.][0-9]{1,2}$"
+    re="^[6-9]{1}[.][0-9]{1,2}[.][0-9]{1,2}$"
     if [[ ${1} =~ ${re} ]]; then
       MAJOR="$(echo ${1} | awk -F. '{ print $1 }')"
       MINOR="$(echo ${1} | awk -F. '{ print $2 }')"
@@ -192,7 +192,7 @@ checkhealth() {
   until [ $(curl -s --cacert ${WORKDIR}/ca.crt -u elastic:${PASSWD} https://localhost:9200/_cluster/health | grep -c green) -eq 1 ]; do
     sleep 2
   done &
-  spinner $! "${blue}[DEBUG]${reset} Checking cluster health.  If this does not finish in ~ 1 minute something is wrong." 
+  spinner $! "${blue}[DEBUG]${reset} Checking cluster health.  If this does not finish in ~ 1 minute something is wrong."
   echo ""
 }
 
@@ -201,7 +201,7 @@ checkfleet() {
   until [ $(curl -f -s -k https://localhost:8220/api/status | grep -c HEALTHY) -eq 1 ]; do
     sleep 2
   done &
-  spinner $! "${blue}[DEBUG]${reset} Checking fleet server health.  If this does not finish in ~ 1 minute something is wrong." 
+  spinner $! "${blue}[DEBUG]${reset} Checking fleet server health.  If this does not finish in ~ 1 minute something is wrong."
   echo ""
 }
 
@@ -211,7 +211,7 @@ grabpasswd() {
     PASSWD=`cat notes | grep ELASTIC_PASSWORD | awk -F"=" {' print $2 '}`
   else
     PASSWD=`cat notes | grep "PASSWORD elastic" | awk {' print $4 '}`
-  fi  
+  fi
   if [ -z ${PASSWD} ]; then
     echo "${red}[DEBUG]${reset} unable to find elastic users password"
     exit
@@ -289,7 +289,7 @@ stack() {
   # Start build
   # if version is 8.0.0 or higher
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
-    
+
     # create elasticsearch.yml
     cat > elasticsearch.yml<<EOF
 network.host: 0.0.0.0
@@ -633,7 +633,7 @@ EOF
     cp ${WORKDIR}/temp/certs/ca/ca.crt ${WORKDIR}/
     chmod 644 ${WORKDIR}/ca.crt
     echo "${green}[DEBUG]${reset} Copied ca.crt to ${WORKDIR}"
-    
+
     # Copy the password to notes
     cat ${WORKDIR}/.env | grep PASSWORD > ${WORKDIR}/notes
 
@@ -648,13 +648,13 @@ xpack.encryptedSavedObjects.encryptionKey: "${ENCRYPTION_KEY}"
 xpack.reporting.kibanaServer.hostname: "localhost"
 EOF
     echo "${green}[DEBUG]${reset} Generated encryption keys for kibana"
-    
+
     # restarting kibana
     docker restart kibana >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Restarted kibana to pick encryption keys"
 
     # end of build for 8.0.0+
-  
+
   elif [ $(checkversion $VERSION) -lt $(checkversion "8.0.0") ]; then
 
     # start build for 8.0.0-
@@ -1348,9 +1348,9 @@ volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
     else
       cp ${WORKDIR}/certs/ca/ca.* ${WORKDIR}/
     fi
-    
+
     echo "${green}[DEBUG]${reset} Copied ca.crt into ${WORKDIR}"
-    
+
     # wait for cluster to be healthy
     checkhealth
 
@@ -1370,7 +1370,7 @@ volumes: {\"data01\", \"data02\", \"data03\" , \"certs\"}
 -Expack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt \
 --url https://localhost:9200" | tee -a notes
     fi
-     
+
     # grab the new elastic password
     grabpasswd
 
@@ -1401,14 +1401,14 @@ EOF
     docker restart kibana >/dev/null 2>&1
     echo "${green}[DEBUG]${reset} Restarted kibana to pick up the new elastic password"
 
-  fi   
+  fi
 
   echo "${green}[DEBUG]${reset} Complete! - stack deployed. ${VERSION} elastic password: ${PASSWD}"
   echo ""
-  
+
   checkhealth
 
-  # new add local fs repository for /temp 
+  # new add local fs repository for /temp
   curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_snapshot/local_temp" -H 'Content-Type: application/json' -d'
 {
   "type" : "fs",
@@ -1454,7 +1454,7 @@ monitor() {
 
   # grab the elastic password
   grabpasswd
-    
+
   # check health
   checkhealth
 
@@ -1482,9 +1482,9 @@ EOF
   fi
 
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
-    
+
     # set password for remote_monitoring_user
-    RMUPASSWD=`docker exec es01 bin/elasticsearch-reset-password -u remote_monitoring_user -a -s -b` 
+    RMUPASSWD=`docker exec es01 bin/elasticsearch-reset-password -u remote_monitoring_user -a -s -b`
     echo "REMOTE_MONITORING_USER=${RMUPASSWD}" >> ${WORKDIR}/notes
 
     # create metricbeat_monitoring role
@@ -1572,8 +1572,8 @@ EOF
     FWUPASSWD="test12345"
     echo "FILEBEAT_WRITER_USER=${FWUPASSWD}" >> ${WORKDIR}/notes
 
-  fi 
-  
+  fi
+
   # metricbeat!!
   # Create templates
   common8="# common
@@ -1690,7 +1690,7 @@ metricbeat.modules:
   ssl.certificate_authorities: [\"/usr/share/metricbeat/certificates/ca/ca.crt\"]
 
   "
-  
+
   es8="# Module: elasticsearch
 - module: elasticsearch
   xpack.enabled: true
@@ -1798,7 +1798,7 @@ metricbeat.modules:
 
 
   # filebeatbeat!!
-  
+
 fb8="#
 http.enabled: true
 http.port: 5066
@@ -1850,7 +1850,7 @@ output.elasticsearch:
   ssl.verification_mode: full
   ssl.certificate_authorities: [\"/usr/share/filebeat/certificates/ca/ca.crt\"]
 "
-  
+
   # create filebeat.yml
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ]; then
     echo "${fb8}" > filebeat.yml
@@ -1903,7 +1903,7 @@ services:
 
 volumes: {"certs"}
 EOF
-  
+
   if [ $(checkversion $VERSION) -lt $(checkversion "7.2.0") ]; then
     if [ "`uname -s`" != "Darwin" ]; then
       sed -i 's/certs/\.\/certs/g' monitor-compose.yml
@@ -1915,7 +1915,7 @@ EOF
   fi
 
   echo "${green}[DEBUG]${reset} Created monitor-compose.yml"
-  
+
   # add setting for xpack.monitoring.collection.enabled
   checkhealth
 
@@ -2103,7 +2103,7 @@ EOF
 }' >/dev/null 2>&1
 
     echo "${green}[DEBUG]${reset} Added minio01 snapshot repository"
-    
+
     if [ $(checkversion $VERSION) -ge $(checkversion "7.4.0") ]; then
       curl -k -u elastic:${PASSWD} -XPUT "https://localhost:9200/_slm/policy/minio-snapshot-policy" -H 'Content-Type: application/json' -d'{  "schedule": "0 */30 * * * ?",   "name": "<minio-snapshot-{now/d}>",   "repository": "minio01",   "config": {     "partial": true  },  "retention": {     "expire_after": "5d",     "min_count": 1,     "max_count": 20   }}' >/dev/null 2>&1
       echo "${green}[DEBUG]${reset} Added minio-snapshot-policy"
@@ -2170,7 +2170,7 @@ fleet() {
   checkhealth
 
   # pull image
-  pullimage "docker.elastic.co/beats/elastic-agent:${VERSION}"
+  pullimage "docker.elastic.co/beats/elastic-agent-complete:${VERSION}"
 
   # get IP
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -2178,7 +2178,7 @@ fleet() {
     echo "${green}[DEBUG]${reset} OS: LINUX   IP found: ${IP}"
   elif [[ "$OSTYPE" == "darwin"* ]]; then
     INTERFACE=`netstat -rn | grep UGScg | awk '{ print $NF }'| tail -n1`
-    IP=`ifconfig ${INTERFACE} | grep inet | awk '{ print $2 }'`
+    IP=`ifconfig ${INTERFACE} | grep -v inet6 | grep inet | awk '{ print $2 }'`
     echo "${green}[DEBUG]${reset} OS: macOS   IP found: ${IP}"
   else
     IP="NEED-2-UPDATE"
@@ -2202,7 +2202,7 @@ EOF
       sleep 10
       echo "${green}[DEBUG]${reset} Restarting ${instance} for FLEET"
     done
-    
+
     checkhealth
 
   fi
@@ -2222,19 +2222,19 @@ EOF
   done &
   spinner $! "${blue}[DEBUG]${reset} Waiting for fleet setup to complete.  If this runs for longer than ~ 1 minute something is wrong"
   echo ""
-  
+
   # create fleet.yml
   if [ ! -f ${WORKDIR}/fleet.yml ]; then
     # touch ${WORKDIR}/fleet.yml
     cat > ${WORKDIR}/fleet.yml <<EOF
 agent.monitoring:
-enabled: true 
-  logs: true 
-  metrics: true 
+enabled: true
+  logs: true
+  metrics: true
   http:
-      enabled: true 
-      host: 0.0.0.0 
-      port: 6791 
+      enabled: true
+      host: 0.0.0.0
+      port: 6791
 EOF
   fi
 
@@ -2246,7 +2246,7 @@ EOF
   -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
 
   if [ $(checkversion $VERSION) -lt $(checkversion "8.1.0") ]; then
-    
+
     # Get policy_id
     POLICYID=`curl -k -s -u elastic:${PASSWD} -XGET https://localhost:5601/api/fleet/agent_policies | jq -r '.items[] | select (.name | contains("Server policy")).id'`
     echo "${green}[DEBUG]${reset} Fleet Server Policy ID: ${POLICYID}"
@@ -2271,7 +2271,6 @@ services:
     environment:
       - FLEET_SERVER_ENABLE=true
       - FLEET_URL=https://fleet:8220
-      - FLEET_ENROLLMENT_TOKEN=${ENROLLTOKEN}
       - FLEET_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
       - FLEET_SERVER_ELASTICSEARCH_HOST=https://es01:9200
       - FLEET_SERVER_ELASTICSEARCH_CA=/usr/share/elastic-agent/certificates/ca/ca.crt
@@ -2281,7 +2280,6 @@ services:
       - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
     ports:
       - 8220:8220
-      - 6791:6791
       - 8200:8200
     restart: on-failure
     volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
@@ -2299,7 +2297,7 @@ EOF
 #    -d '{"fleet_server_hosts":["https://'${IP}':8220"]}' >/dev/null 2>&1
 #
 #    sleep 5
-    
+
     ## ssl ca
     if [ -f ${WORKDIR}/ca.temp ]; then
       rm -rf ${WORKDIR}/ca.temp
@@ -2356,7 +2354,7 @@ EOF
     fi
 
   elif [ $(checkversion $VERSION) -ge $(checkversion "8.1.0") ]; then
-  
+
     # Create Fleet server policy
     echo "${green}[DEBUG]${reset} Creating Fleet Server Policy"
     curl -k -u "elastic:${PASSWD}" "https://localhost:5601/api/fleet/agent_policies?sys_monitoring=true" \
@@ -2365,7 +2363,7 @@ EOF
     -d '{"id":"fleet-server-policy","name":"Fleet Server policy","description":"","namespace":"default","monitoring_enabled":["logs","metrics"],"has_fleet_server":true}' >/dev/null 2>&1
 
     sleep 5
-    
+
 #    # Setting Fleet URL
 #    echo "${green}[DEBUG]${reset} Setting Fleet URL"
 #    curl -k -u "elastic:${PASSWD}" -XPUT "https://localhost:5601/api/fleet/settings" \
@@ -2377,10 +2375,10 @@ EOF
 
     # setting Elasticsearch URL and SSL certificate and fingerprint
     echo "${green}[DEBUG]${reset} Setting Elasticsearch URL & Fingerprint & SSL CA"
-    
+
     ## fingerprint
     FINGERPRINT=`openssl x509 -fingerprint -sha256 -noout -in ${WORKDIR}/ca.crt | awk -F"=" {' print $2 '} | sed s/://g`
-    
+
     ## ssl ca
     if [ -f ${WORKDIR}/ca.temp ]; then
       rm -rf ${WORKDIR}/ca.temp
@@ -2427,7 +2425,7 @@ services:
   fleet:
     container_name: fleet
     user: root
-    image: docker.elastic.co/beats/elastic-agent:${VERSION}
+    image: docker.elastic.co/beats/elastic-agent-complete:${VERSION}
     environment:
       - FLEET_SERVER_ENABLE=true
       - FLEET_URL=https://fleet:8220
@@ -2441,7 +2439,7 @@ services:
       - CERTIFICATE_AUTHORITIES=/usr/share/elastic-agent/certificates/ca/ca.crt
     ports:
       - 8220:8220
-      - 6791:6791
+      - 8200:8200
     restart: on-failure
     volumes: ['certs:\$FLEET_CERTS_DIR', './temp:/temp', './fleet.yml:/usr/share/elastic-agent/fleet.yml']
 
@@ -2457,7 +2455,7 @@ EOF
 
   echo ""
   echo "${red}[DEBUG]${reset} Not sure if its my script or a bug but even when the Fleet server is registered correctly and healthy and you send the kibana API call to set the default fleet output"
-  echo "${red}[DEBUG]${reset} It updates the Fleet Settings in kibana but does not update the Fleet server's state.yml in 7.x" 
+  echo "${red}[DEBUG]${reset} It updates the Fleet Settings in kibana but does not update the Fleet server's state.yml in 7.x"
   echo "${red}[DEBUG]${reset} Please browse to Fleet Settings and add something like \"# dork\" to the ${green}Elasticsearch output configuration (YAML)${reset} section and SAVE to update it"
 } # End of FLEET
 
@@ -2864,13 +2862,13 @@ EOF
   else
     echo "${green}[DEBUG]${reset} OpenLDAP container deployed"
   fi
-  
+
   sleep 10
 
   # import ldap.ldif
   echo "${green}[DEBUG]${reset} Importing ldap.ldif"
   docker exec ldap ldapadd -x -D "cn=admin,dc=example,dc=org" -w admin -f /tmp/ldap.ldif -H ldap://localhost -ZZ >/dev/null 2>&1
-  
+
   # updating elasticsearch.yml
   echo "${green}[DEBUG]${reset} Updating elasticsearch.yml"
   cat >> elasticsearch.yml<<EOF
@@ -2960,7 +2958,7 @@ EOF
 
   # wait for cluster to be healthy
   checkhealth
-  
+
   echo "${green}[DEBUG]${reset} LDAP configured"
   echo "${green}[DEBUG]${reset} user1/user1 is configured for ldap group admin and has superuser role"
   echo "${green}[DEBUG]${reset} user2/user2 is configured for ldap group users and has *_admin roles"
