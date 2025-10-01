@@ -670,7 +670,7 @@ EOF
 
     # create temp kibana.yml
     cat > kibana.yml<<EOF
-elasticsearch.username: "elstic"
+elasticsearch.username: "elastic"
 elasticsearch.password: "${PASSWD}"
 EOF
     echo "${green}[DEBUG]${reset} Created kibana.yml"
