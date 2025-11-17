@@ -3,6 +3,7 @@
 # This script will  answer quick questions about shell commmands and elasticsearch related topics
 # using the Gemini API from Google Cloud's Generative AI models.
 # you will need to create ~/.env file with GEMINI_API_KEY variable set.
+# https://ai.google.dev/gemini-api/docs/api-key
 
 # Stop the script if any command fails
 set -e
