@@ -115,14 +115,25 @@ function build() {
   echo "${green}[DEBUG]${reset} MEM will be set to ${MEM}mb"
   minikube config set memory ${MEM}
 
-  # adding host entries onto the host
-  echo "192.168.49.170 kibana.eck.lab" > /etc/hosts
   # adding host entries for minikube
   mkdir -p ~/.minikube/files/etc
   echo "127.0.0.1 localhost" > ~/.minikube/files/etc/hosts
   echo "192.168.49.170 kibana.eck.lab" >> ~/.minikube/files/etc/hosts
 
   minikube start --driver=docker
+
+  # fixing storageClass
+  echo "${green}[DEBUG]${reset} Fixing storageClass"
+  minikube addons disable default-storageclass >/dev/null 2>&1
+  minikube addons enable csi-hostpath-driver >/dev/null 2>&1
+  kubectl get storageclass csi-hostpath-sc -o json | jq '
+  .metadata.name = "standard" |
+  .metadata.annotations["storageclass.kubernetes.io/is-default-class"] = "true" |
+  .allowVolumeExpansion = true
+  ' | kubectl apply -f -
+  kubectl delete storageclass csi-hostpath-sc
+
+  # enable metallb
   minikube addons enable metallb
   baseip=`minikube ip | cut -d"." -f1-3`
   startip="${baseip}.150"
