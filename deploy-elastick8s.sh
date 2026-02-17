@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # justin lim <justin@isthecoolest.ninja>
-# 
+#
 # version 3.1
 
 # curl -fsSL https://raw.githubusercontent.com/jlim0930/scripts/master/deploy-elastick8s.sh -o deploy-elastick8s.sh
@@ -53,7 +53,7 @@ reset=`tput sgr0`
 ###############################################################################################################
 
 # help
-help() 
+help()
 {
   echo ""
   echo "${green}This script will allow you to stand up various elasticstack configurations on suing ECK operator, HELM without the operator, HELM with the operator${reset}"
@@ -196,7 +196,7 @@ checkhelm()
 } # end checkhelm
 
 # FUNCTION - checkversion
-checkversion() 
+checkversion()
 {
   echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'
 } # end checkversion
@@ -295,7 +295,7 @@ checkrequiredversionhelm() {
     echo ""
     help
     exit
-  fi 
+  fi
 } # end checkrequiredversionhelm
 
 # FUNCTION - checkrequiredversionnative
@@ -306,7 +306,7 @@ checkrequiredversionnative() {
     echo ""
     help
     exit
-  fi 
+  fi
 } # end checkrequiredversionnative
 
 # FUNCTION - checkhealth
@@ -343,7 +343,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
-  
+
     unset ESIP
     c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
@@ -358,7 +358,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
-  
+
     unset KIBANAIP
     c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
@@ -392,7 +392,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
-  
+
     unset ESIP
     c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
@@ -407,7 +407,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
-  
+
     unset KIBANAIP
     c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
@@ -439,7 +439,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elastic password for ${1}: ${blue}${PASSWORD}${reset}"
     echo "${1} elastic password: ${PASSWORD}" >> notes
-  
+
     unset ESIP
     c=0
     while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
@@ -454,7 +454,7 @@ createsummary()
     done
     echo "${green}[DEBUG]${reset} Grabbed elasticsearch endpoint for  ${1}: ${blue}https://${ESIP}:9200${reset}"
     echo "${1} elasticsearch endpoint: https://${ESIP}:9200" >> notes
-  
+
     unset KIBANAIP
     c=0
     while [ "${KIBANAIP}" = "" -o "${KIBANAIP}" = "<pending>" ]
@@ -531,7 +531,7 @@ summary()
     echo ""
     echo "${green}[SUMMARY]${reset} ${blue}ca.crt${reset} is located in ${blue}${WORKDIR}/ca.crt${reset}"
 
-  fi  
+  fi
 } # end summary
 
 # FUNCTION - beatsetup
@@ -557,7 +557,7 @@ createcerts() {
       elasticsearch-certutil ca --silent --pem -out /app/ca.zip && \
       unzip /app/ca.zip -d /app && \
       elasticsearch-certutil cert --silent --pem -out /app/${1}.zip --name ${1} --dns ${1} --ca-cert /app/ca/ca.crt --ca-key /app/ca/ca.key && \
-      unzip /app/${1}.zip -d /app 
+      unzip /app/${1}.zip -d /app
   " >/dev/null 2>&1
   mkdir ${WORKDIR}/${1}-certs >/dev/null 2>&1
   docker cp ${1}-certs:/app/ca/ca.crt ${WORKDIR}/${1}-certs/
@@ -582,7 +582,7 @@ cleanup()
   echo ""
   echo "${green}********** Cleaning up **********${reset}"
   echo ""
-  
+
   if [ -e ${WORKDIR}/ECK ]; then
     for item in `ls -1t ${WORKDIR}/*.yaml 2>/dev/null`
     do
@@ -606,7 +606,7 @@ cleanup()
     kubectl delete secrets elastic-certificates > /dev/null 2>&1
     kubectl delete secrets elastic-credentials > /dev/null 2>&1
     kubectl delete secrets elastic-endpoint > /dev/null 2>&1
-    
+
     echo "${green}[DEBUG]${reset} DELETING Resources for: ${blue}helm-lab kibana${reset}"
     helm uninstall helm-lab-kb > /dev/null 2>&1
     kubectl delete secrets kibana-credentials > /dev/null 2>&1
@@ -670,11 +670,11 @@ cleanup()
 } # end cleanup
 
 # FUNCTION - operator
-operator() 
+operator()
 {
   echo "${green} ********** Deploying ECK ${blue}${ECKVERSION}${green} OPERATOR **************${reset}"
   echo ""
-  
+
   touch ${WORKDIR}/ECK
 
   # all version checks complete & directory structures created starting operator
@@ -716,7 +716,7 @@ operator()
   echo ""
   kubectl -n elastic-system get all | sed "s/^/                     /"
 
-  
+
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} Creating license.yaml"
   # apply trial licence
   cat >> ${WORKDIR}/license.yaml<<EOF
@@ -728,7 +728,7 @@ metadata:
   labels:
     license.k8s.elastic.co/type: enterprise_trial
   annotations:
-    elastic.co/eula: accepted 
+    elastic.co/eula: accepted
 EOF
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} Applying trial license"
   kubectl apply -f ${WORKDIR}/license.yaml  > /dev/null 2>&1
@@ -774,7 +774,7 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
-          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=1048576']
     count: 3
   http:
     service:
@@ -824,7 +824,7 @@ EOF
 
 # FUNCTION - eckldap
 eckldap() {
-  
+
   echo "${green}[DEBUG]${reset} Adding OPENLDAP server with TLS and patching ES deployment for ldap realm"
   echo ""
 
@@ -993,7 +993,7 @@ EOF
 } # end eckldap
 
 # FUNCTION - dedicated
-dedicated() 
+dedicated()
 {
   echo ""
   echo "${green} ********** Deploying ECK ${blue}${ECKVERSION}${green} STACK ${BLUE}${VERSION}${green} CLUSTER ${blue}${1}${reset} with DEDICATED masters and data nodes **************${reset}"
@@ -1032,7 +1032,7 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
-          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=1048576']
     count: 3
   - name: data
     config:
@@ -1057,7 +1057,7 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
-          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=1048576']
     count: 3
   http:
     service:
@@ -1524,7 +1524,7 @@ monitor1()
   echo ""
   echo "${green} ********** Deploying ECK ${blue}${ECKVERSION}${green} STACK ${BLUE}${VERSION}${green} Stack Monitoring with BEATS in Pods **************${reset}"
   echo ""
-  
+
   # remove labels from eck-lab-montor pods
   # is this needed?
   echo "${green}[DEBUG]${reset} ECK ${blue}${ECKVERSION}${reset} STACK ${blue}${VERSION}${reset} Removing scrape label from monitoring pods"
@@ -1793,7 +1793,7 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
-          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=1048576']
     count: 3
   http:
     service:
@@ -1845,12 +1845,12 @@ EOF
 
 # FUNCTION - apm
 eckapm() {
-  
+
   echo "${green}[DEBUG]${reset} Adding APM Server to the default stack"
   echo ""
 
   touch ${WORKDIR}/ECKAPM
-  
+
   sleep 5
   echo "${green}[DEBUG]${reset} Creating patch for kibana to install the APM assets(Fleet)"
   cat > ${WORKDIR}/kibana-eck-lab-patch.yaml <<EOF
@@ -1908,7 +1908,7 @@ EOF
     done
     spinner $! "${blue}[DEBUG]${reset} Waiting for lb IP assignment for APM Server".
     APMIP=`kubectl get service | grep ${1}-apm-http | awk '{ print $4 }'`
-    
+
     echo "${green}[DEBUG]${reset} Grabbed APM endpoint for ${1}: ${blue}https://${APMIP}:8200${reset}"
     echo "${1} APM endpoint: https://${APMIP}:8200" >> notes
 
@@ -2008,7 +2008,7 @@ rules:
 - apiGroups: ["extensions"]
   resources:
     - replicasets
-  verbs: 
+  verbs:
   - "get"
   - "list"
   - "watch"
@@ -2085,7 +2085,7 @@ spec:
         - name: agent
           command:
           - bash
-          - -c 
+          - -c
           - |
             #!/usr/bin/env bash
             set -e
@@ -2122,7 +2122,7 @@ spec:
         - name: agent
           command:
           - bash
-          - -c 
+          - -c
           - |
             #!/usr/bin/env bash
             set -e
@@ -2253,7 +2253,7 @@ EOF
     -d "$(generate_post_data)" >/dev/null 2>&1
 
     sleep 10
-    
+
     echo "${green}[DEBUG]${reset} Setting Fleet default output"
 
     # Lets go ahead and create an External agent policy
@@ -2293,7 +2293,7 @@ EOF
 
   # for Fleet Server 8.0 - 1 output sometimes the output is not set correctly. going to fix
   if [ $(checkversion $VERSION) -ge $(checkversion "8.0.0") ] && [ $(checkversion $VERSION) -lt $(checkversion "8.2.0") ]; then
-    
+
     echo "${green}[DEBUG]${reset} Waiting 30 seconds for fleet server to calm down to set the output"
     sleep 30 &
     spinner $! "${blue}[DEBUG]${reset} Sleeping for 30 seconds waiting for fleet server"
@@ -2333,7 +2333,7 @@ helmstack()
   echo ""
   echo "${green} ********** Deploying ELASTIC STACK ${blue}${VERSION}${green} with HELM CHARTS - without ECK operator **************${reset}"
   echo ""
-  
+
   # add helm repo and update it
   helm repo add elastic https://helm.elastic.co >/dev/null 2>&1
   helm update repo elastic >/dev/null 2>&1
@@ -2354,11 +2354,11 @@ helmstack()
 ---
 clusterName: "${1}-es"
 nodeGroup: "default"
-  
+
 # The service that non master groups will try to connect to when joining the cluster
 # This should be set to clusterName + "-" + nodeGroup for your master group
 masterService: "${1}-es-default"
-    
+
 # Elasticsearch roles that will be applied to this nodeGroup
 # These will be set as environment variables. E.g. node.master=true
 roles:
@@ -2468,7 +2468,7 @@ podAnnotations:
   co.elastic.logs.json-logging/json.keys_under_root: "true"
   co.elastic.logs.json-logging/json.add_error_key: "true"
   co.elastic.logs.json-logging/json.message_key: "message"
-  
+
 protocol: https
 
 # Allows you to add any config files in /usr/share/kibana/config/
@@ -2514,7 +2514,7 @@ EOF
     sleep 2
   done
 
-  
+
   echo ""
   echo "${green}[DEBUG]${reset} Stack is up but will take a minute or two to become healthy.  Please view ${blue}kubectl get pods${reset} to ensure that all pods are up before trying to login"
 
@@ -2522,7 +2522,7 @@ EOF
 
 # FUNCTION - helmldap
 helmldap() {
-  
+
   echo ""
   echo "${green}[DEBUG]${reset} Adding OPENLDAP server with TLS and patching ES deployment for ldap realm"
   echo ""
@@ -2703,13 +2703,13 @@ helmbeats()
 
   beatsetup "filebeat"
   beatsetup "metricbeat"
-  
+
   echo "${green}[DEBUG]${reset} Creating fb-values.yaml"
   cat > ${WORKDIR}/fb-values.yaml <<EOF
 ---
 daemonset:
   filebeatConfig:
-    filebeat.yml: | 
+    filebeat.yml: |
       filebeat.inputs:
       - type: container
         paths:
@@ -2764,7 +2764,7 @@ daemonset:
     co.elastic.logs.json-logging/json.add_error_key: "true"
     co.elastic.logs.json-logging/json.message_key: "message"
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying filebeat"
   helm install ${1}-fb elastic/filebeat -f ${WORKDIR}/fb-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
@@ -2776,7 +2776,7 @@ EOF
   echo "${green}[DEBUG]${reset} Adding ${blue}prometheus-community${reset} repository as pre-req"
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1
   helm repo update >/dev/null 2>&1
-  
+
   echo "${green}[DEBUG]${reset} Create kube_state_metrics"
   helm install kube-state-metrics prometheus-community/kube-state-metrics >/dev/null 2>&1
 
@@ -2892,7 +2892,7 @@ deployment:
           name: elastic-credentials
           key: password
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying metricbeat"
   helm install ${1}-mb elastic/metricbeat -f ${WORKDIR}/mb-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
@@ -2904,7 +2904,7 @@ EOF
 helmlogstash() {
 
   echo "${green}[DEBUG]${reset} Deploying logstash via helm"
-  
+
   echo "${green}[DEBUG]${reset} Creating ls-values.yaml"
   cat > ${WORKDIR}/ls-values.yaml <<EOF
 ---
@@ -2969,7 +2969,7 @@ helmlsbeats() {
 
   echo ""
   echo "${green}[DEBUG]${reset} Deploying filebeat via helm for logstash output"
-  
+
   echo "${green}[DEBUG]${reset} Creating fb-values.yaml"
   cat > ${WORKDIR}/fb-values.yaml <<EOF
 ---
@@ -2993,7 +2993,7 @@ daemonset:
     co.elastic.logs.json-logging/json.add_error_key: "true"
     co.elastic.logs.json-logging/json.message_key: "message"
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying filebeat"
   helm install ${1}-fb elastic/filebeat -f ${WORKDIR}/fb-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
@@ -3005,7 +3005,7 @@ EOF
   echo "${green}[DEBUG]${reset} Adding ${blue}prometheus-community${reset} repository as pre-req"
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1
   helm repo update >/dev/null 2>&1
-  
+
   echo "${green}[DEBUG]${reset} Create kube_state_metrics"
   helm install kube-state-metrics prometheus-community/kube-state-metrics >/dev/null 2>&1
 
@@ -3079,7 +3079,7 @@ deployment:
       output.logstash:
         hosts: ["${1}-ls-logstash:5044"]
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying metricbeat"
   helm install ${1}-mb elastic/metricbeat -f ${WORKDIR}/mb-values.yaml --set imageTag=${VERSION} >/dev/null 2>&1
 
@@ -3089,7 +3089,7 @@ EOF
 
 # FUNCTION - helmmonitor
 helmmonitor() {
-  
+
   echo ""
   echo "${green}[DEBUG]${reset} Deploying metricbeat via helm for stack monitoring"
 
@@ -3121,8 +3121,8 @@ deployment:
       - module: elasticsearch
         xpack.enabled: true
         period: 10s
-        hosts: ["https://${1}-es-default:9200"] 
-        scope: cluster 
+        hosts: ["https://${1}-es-default:9200"]
+        scope: cluster
         username: '\${ELASTICSEARCH_USERNAME}'
         password: '\${ELASTICSEARCH_PASSWORD}'
         ssl.enabled: true
@@ -3293,7 +3293,7 @@ spec:
         co.elastic.logs.json-logging/json.add_error_key: "true"
         co.elastic.logs.json-logging/json.keys_under_root: "true"
         co.elastic.logs.json-logging/json.message_key: "message"
-        
+
 #        configchecksum: b95db6488e46ed1fdea8a0b618610ee76ada610b7762775190aeb79ac2b0cf8
     spec:
       securityContext:
@@ -3326,7 +3326,7 @@ spec:
           privileged: true
         image: "docker.elastic.co/elasticsearch/elasticsearch:${VERSION}"
         imagePullPolicy: "IfNotPresent"
-        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        command: ["sysctl", "-w", "vm.max_map_count=1048576"]
         resources:
           {}
 
@@ -3474,7 +3474,7 @@ EOF
   checkhealth "statefulset" "${1}-default" "readyReplicas" "3"
   sleep 5
   echo ""
-  
+
   # get ESIP
   unset ESIP
   while [ "${ESIP}" = "" -o "${ESIP}" = "<pending>" ]
@@ -3501,7 +3501,7 @@ EOF
     until curl -k -s -X POST -u "elastic:${PASSWORD}" "https://${ESIP}:9200/_security/user/kibana_system/_password" -H "Content-Type: application/json" -d "{\"password\": \"${PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
     kubectl create secret generic kibana-credentials --from-literal=password=$(echo $PASSWORD) --from-literal=username=kibana_system >/dev/null 2>&1
   fi
-  
+
   # create encryptionkey and its secret
   echo "${green}[DEBUG]${reset} Creating kibana encryption key secret"
   encryptionkey=`openssl rand -base64 29 | tr -d "=+/" | cut -c1-32`
@@ -3689,7 +3689,7 @@ EOF
 
   echo ""
   echo "${green}[DEBUG]${reset} Stack is up but will take a minute or two to become healthy.  Please view ${blue}kubectl get pods${reset} to ensure that all pods are up before trying to login"
-  
+
 } # end nativestack
 
 # FUNCTION - nativebeats
@@ -3698,7 +3698,7 @@ nativebeats()
 
   beatsetup "filebeat"
   beatsetup "metricbeat"
-  
+
   echo ""
   echo "${green}[DEBUG]${reset} Deploying filebeat via kubernetes"
 
@@ -3723,8 +3723,8 @@ nativebeats()
 
   echo "${green}[DEBUG]${reset} Create beats_user password"
   until curl -k -s -X POST -u "elastic:${PASSWORD}" "https://${ESIP}:9200/_security/user/beats_user/_password" -H "Content-Type: application/json" -d "{\"password\": \"${PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
-  kubectl create secret generic beats-credentials --from-literal=password=$(echo $PASSWORD) --from-literal=username=beats_user >/dev/null 2>&1  
-  
+  kubectl create secret generic beats-credentials --from-literal=password=$(echo $PASSWORD) --from-literal=username=beats_user >/dev/null 2>&1
+
   echo "${green}[DEBUG]${reset} Creating filebeat-kubernetes.yaml"
   cat > ${WORKDIR}/filebeat-kubernetes.yaml <<EOF
 ---
@@ -3973,7 +3973,7 @@ metadata:
     k8s-app: filebeat
 ---
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying filebeat"
   kubectl apply -f ${WORKDIR}/filebeat-kubernetes.yaml
 
@@ -4364,7 +4364,7 @@ metadata:
     k8s-app: metricbeat
 ---
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying metricbeat"
   kubectl apply -f ${WORKDIR}/metricbeat-kubernetes.yaml >/dev/null 2>&1
 
@@ -4412,7 +4412,7 @@ nativemonitor()
 
   echo "${green}[DEBUG]${reset} Create beats_user password"
   until curl -k -s -X POST -u "elastic:${PASSWORD}" "https://${ESIP}:9200/_security/user/beats_user/_password" -H "Content-Type: application/json" -d "{\"password\": \"${PASSWORD}\"}" | grep -q "^{}"; do sleep 10; done;
-  kubectl create secret generic beats-credentials --from-literal=password=$(echo $PASSWORD) --from-literal=username=beats_user >/dev/null 2>&1  
+  kubectl create secret generic beats-credentials --from-literal=password=$(echo $PASSWORD) --from-literal=username=beats_user >/dev/null 2>&1
 
   echo "${green}[DEBUG]${reset}Creating metricbeat-kubernetes.yaml"
   cat > ${WORKDIR}/metricbeat-kubernetes.yaml <<EOF
@@ -4751,7 +4751,7 @@ metadata:
     k8s-app: metricbeat
 ---
 EOF
-  
+
   echo "${green}[DEBUG]${reset} Deploying metricbeat"
   kubectl apply -f ${WORKDIR}/metricbeat-kubernetes.yaml >/dev/null 2>&1
 

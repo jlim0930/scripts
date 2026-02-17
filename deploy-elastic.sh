@@ -132,7 +132,7 @@ checkmaxmapcount() {
     if [ ${COUNT} -le "262144" ]; then
       echo "${green}[DEBUG]${reset} Ensuring vm.max_map_count is ${COUNT}... proceeding"
     else
-      echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to 262144.  Please run sudo sysctl -w vm.max_map_count=262144"
+      echo "${red}[DEBUG]${reset} vm.max_map_count needs to be set to new 1048576 old 262144.  Please run sudo sysctl -w vm.max_map_count=1048576"
       exit
     fi
   fi
@@ -3001,7 +3001,7 @@ case ${1} in
     fi
     ;;
   apm)
-    if [ $(checkversion $VERSION) -ge $(checkversion "7.16.0") ]; then
+    if [ $(checkversion $VERSION) -ge $(checkversion "10.16.0") ]; then
       echo "${green}[DEBUG]${reset} APM server is now part of Fleet Integrations.  Please use fleet"
       echo ""
       help
