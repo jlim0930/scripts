@@ -12,6 +12,8 @@ REGION="us-central1"
 machine_type="e2-standard-4"    # GCP machine type - gcloud compute machine-types list
 boot_disk_type="pd-ssd"         # disk type -  gcloud compute disk-types list
 label="division=support,org=support,team=support,project=gcp-lab"
+max_run_duration="5d"           # VM auto-termination window; adjust as needed
+instance_termination_action="delete" # stop|delete when the VM reaches max_run_duration
 
 # --------------  Do not edit below
 
@@ -142,6 +144,8 @@ create_instances() {
         --labels ${label} \
         --project=${gcp_project} \
         --zone=${gcp_zone} \
+        --max-run-duration=${max_run_duration} \
+        --instance-termination-action=${instance_termination_action} \
         --machine-type=${machine_type} \
         --network-interface=network-tier=PREMIUM,subnet=default \
         --maintenance-policy=MIGRATE \
@@ -160,6 +164,8 @@ create_instances() {
         --labels ${label} \
         --project=${gcp_project} \
         --zone=${gcp_zone} \
+        --max-run-duration=${max_run_duration} \
+        --instance-termination-action=${instance_termination_action} \
         --machine-type=${machine_type} \
         --network-interface=network-tier=PREMIUM,subnet=default \
         --maintenance-policy=MIGRATE \
