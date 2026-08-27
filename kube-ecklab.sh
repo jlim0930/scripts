@@ -120,7 +120,7 @@ function build() {
   echo "127.0.0.1 localhost" > ~/.minikube/files/etc/hosts
   echo "192.168.49.170 kibana.eck.lab" >> ~/.minikube/files/etc/hosts
 
-  minikube start --driver=docker
+  minikube start --driver=docker --mount --mount-string="/u01:/u01"
 
   # fixing storageClass
   echo "${green}[DEBUG]${reset} Fixing storageClass"
@@ -132,6 +132,24 @@ function build() {
   .allowVolumeExpansion = true
   ' | kubectl apply -f -
   kubectl delete storageclass csi-hostpath-sc
+
+  # setup pd-ssd storageclass backed by /u01
+  echo "${green}[DEBUG]${reset} Setting up pd-ssd StorageClass backed by /u01"
+  kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.28/deploy/local-path-storage.yaml >/dev/null 2>&1
+  kubectl delete storageclass local-path >/dev/null 2>&1
+  kubectl patch configmap local-path-config -n local-path-storage --type merge \
+    -p '{"data":{"config.json":"{\"nodePathMap\":[{\"node\":\"DEFAULT_PATH_FOR_NON_LISTED_NODES\",\"paths\":[\"/u01\"]}]}"}}'  >/dev/null 2>&1
+  kubectl apply -f - >/dev/null 2>&1 <<EOF
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pd-ssd
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+EOF
+  echo "${green}[DEBUG]${reset} pd-ssd StorageClass created"
 
   # enable metallb
   minikube addons enable metallb
