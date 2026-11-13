@@ -109,7 +109,7 @@ EOF
 
     yum config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 
-    yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq net-tools kubectl docker-ce docker-ce-cli containerd.io -y
+    yum install unzip bind-utils openssl vim-enhanced bash-completion git wget nmap bc jq net-tools docker-ce docker-ce-cli containerd.io -y
 
     for u in $(lid -g -n google-sudoers); do usermod -a -G docker $u; done
     systemctl daemon-reload
